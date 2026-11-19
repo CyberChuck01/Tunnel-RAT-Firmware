@@ -63,6 +63,8 @@ jobs:
           fi
 
       - name: "Check API version for consistency with OFW release channel"
+        # Tunnel R.A.T.: informational only - OFW can move ahead of the Momentum base
+        continue-on-error: true
         run: |
           set -e
           symbols="targets/$TARGET/api_symbols.csv"
