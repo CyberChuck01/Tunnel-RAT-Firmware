@@ -34,7 +34,8 @@ static void momentum_app_scene_interface_mainmenu_menu_style_changed(VariableIte
     app->save_settings = true;
 }
 
-static void momentum_app_scene_interface_mainmenu_app_changed(VariableItem* item) {
+__attribute__((unused)) static void
+    momentum_app_scene_interface_mainmenu_app_changed(VariableItem* item) {
     MomentumApp* app = variable_item_get_context(item);
     app->mainmenu_app_index = variable_item_get_current_value_index(item);
     variable_item_set_current_value_text(
@@ -45,7 +46,8 @@ static void momentum_app_scene_interface_mainmenu_app_changed(VariableItem* item
     variable_item_set_item_label(item, label);
 }
 
-static void momentum_app_scene_interface_mainmenu_move_app_changed(VariableItem* item) {
+__attribute__((unused)) static void
+    momentum_app_scene_interface_mainmenu_move_app_changed(VariableItem* item) {
     MomentumApp* app = variable_item_get_context(item);
     uint8_t idx = app->mainmenu_app_index;
     size_t size = CharList_size(app->mainmenu_app_labels);
