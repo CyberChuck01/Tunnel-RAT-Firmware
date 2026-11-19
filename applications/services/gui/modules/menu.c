@@ -49,8 +49,8 @@ static void menu_process_ok(Menu* menu);
 static void menu_get_name(MenuItem* item, FuriString* name, bool shorter) {
     furi_string_set(name, item->label);
     if(shorter) {
-        if(!furi_string_cmp(name, "Momentum")) {
-            furi_string_set(name, "MNTM");
+        if(!furi_string_cmp(name, "R.A.T. Settings")) {
+            furi_string_set(name, "R.A.T.");
             return;
         } else if(!furi_string_cmp(name, "125 kHz RFID")) {
             furi_string_set(name, "RFID");
@@ -578,25 +578,35 @@ static void menu_draw_callback(Canvas* canvas, void* _model) {
             canvas_draw_str_aligned(canvas, 126, 8, AlignRight, AlignBottom, bat);
             canvas_draw_line(canvas, 0, 10, 127, 10);
 
-            // Neighbour icons (100%)
+            // Neighbour icons: small icons only; 32px rat badges just get arrows
             MenuItem* prev_item =
                 MenuItemArray_get(model->items, (position + items_count - 1) % items_count);
             MenuItem* next_item = MenuItemArray_get(model->items, (position + 1) % items_count);
             if(items_count > 1) {
-                menu_centered_icon(canvas, prev_item, 12, 22, 20, 20);
-                menu_centered_icon(canvas, next_item, 96, 22, 20, 20);
-                // arrows
+                MenuItem* side[2] = {prev_item, next_item};
+                const int32_t side_cx[2] = {22, 106};
+                for(uint8_t s = 0; s < 2; s++) {
+                    const Icon* sic = side[s]->icon->icon;
+                    // big rat badges read badly at half size: arrows only (Bruce-style)
+                    if(sic->width > 16) continue;
+                    int32_t sc = 100;
+                    int32_t sw = sic->width * sc / 100;
+                    int32_t sh = sic->height * sc / 100;
+                    canvas_draw_icon_animation_ex(
+                        canvas, side_cx[s] - sw / 2, 32 - sh / 2, sc, sc, side[s]->icon);
+                }
                 canvas_draw_triangle(canvas, 4, 32, 6, 6, CanvasDirectionRightToLeft);
                 canvas_draw_triangle(canvas, 123, 32, 6, 6, CanvasDirectionLeftToRight);
             }
 
-            // Center icon at 200%
+            // Centre icon: 32px rat badge at 100%, small icons at 200%
             item = MenuItemArray_get(model->items, position);
             elements_bold_rounded_frame(canvas, 44, 13, 39, 37);
             const Icon* ic = item->icon->icon;
-            int32_t iw = ic->width * 2;
-            int32_t ih = ic->height * 2;
-            canvas_draw_icon_animation_ex(canvas, 64 - iw / 2, 32 - ih / 2, 200, 200, item->icon);
+            int32_t cs = ic->width > 16 ? 100 : 200;
+            int32_t iw = ic->width * cs / 100;
+            int32_t ih = ic->height * cs / 100;
+            canvas_draw_icon_animation_ex(canvas, 64 - iw / 2, 32 - ih / 2, cs, cs, item->icon);
 
             // Label
             canvas_set_font(canvas, FontPrimary);

@@ -135,6 +135,7 @@ typedef enum {
 typedef struct {
     const char* label;
     const Icon* icon;
+    const Icon* icon_big; // 32x32 rat badge for the Tunnel R.A.T. carousel
     TratCatKind kind;
     const TratBuiltin* builtins;
     size_t builtins_count;
@@ -150,29 +151,63 @@ typedef struct {
     .builtins_count = sizeof((const TratBuiltin[]){__VA_ARGS__}) / sizeof(TratBuiltin)
 
 static const TratCategory trat_categories[] = {
-    {.label = "Sub-GHz", .icon = &A_Sub1ghz_14, TRAT_DIRS("Sub-GHz")},
-    {.label = "NFC", .icon = &A_NFC_14, TRAT_BUILTINS({"NFC", "NFC"}), TRAT_DIRS("NFC")},
+    {.label = "Sub-GHz",
+     .icon = &A_Sub1ghz_14,
+     .icon_big = &I_CatBig_SubGhz_32x32,
+     TRAT_DIRS("Sub-GHz")},
+    {.label = "NFC",
+     .icon = &A_NFC_14,
+     .icon_big = &I_CatBig_Nfc_32x32,
+     TRAT_BUILTINS({"NFC", "NFC"}),
+     TRAT_DIRS("NFC")},
     {.label = "RFID",
      .icon = &A_125khz_14,
+     .icon_big = &I_CatBig_Rfid_32x32,
      TRAT_BUILTINS({"125 kHz RFID", "125 kHz RFID"}),
      TRAT_DIRS("RFID")},
-    {.label = "Infrared", .icon = &A_Infrared_14, TRAT_DIRS("Infrared")},
-    {.label = "iButton", .icon = &A_iButton_14, TRAT_DIRS("iButton")},
-    {.label = "BadUSB", .icon = &A_BadUsb_14, TRAT_DIRS("USB")},
-    {.label = "Bluetooth", .icon = &I_Cat_Bluetooth_14x14, TRAT_DIRS("Bluetooth")},
+    {.label = "Infrared",
+     .icon = &A_Infrared_14,
+     .icon_big = &I_CatBig_Infrared_32x32,
+     TRAT_DIRS("Infrared")},
+    {.label = "iButton",
+     .icon = &A_iButton_14,
+     .icon_big = &I_CatBig_IButton_32x32,
+     TRAT_DIRS("iButton")},
+    {.label = "BadUSB", .icon = &A_BadUsb_14, .icon_big = &I_CatBig_BadUsb_32x32, TRAT_DIRS("USB")},
+    {.label = "Bluetooth",
+     .icon = &I_Cat_Bluetooth_14x14,
+     .icon_big = &I_CatBig_Bluetooth_32x32,
+     TRAT_DIRS("Bluetooth")},
     {.label = "GPIO / WiFi",
      .icon = &A_GPIO_14,
+     .icon_big = &I_CatBig_Gpio_32x32,
      TRAT_BUILTINS({"GPIO", "GPIO"}),
      TRAT_DIRS("GPIO")},
-    {.label = "Tunnel R.A.T.", .icon = &I_Cat_TunnelRat_14x14, TRAT_DIRS("Tunnel RAT")},
-    {.label = "Games", .icon = &I_Cat_Games_14x14, TRAT_DIRS("Games")},
-    {.label = "Media", .icon = &I_Cat_Media_14x14, TRAT_DIRS("Media")},
+    {.label = "Tunnel R.A.T.",
+     .icon = &I_Cat_TunnelRat_14x14,
+     .icon_big = &I_CatBig_TunnelRat_32x32,
+     TRAT_DIRS("Tunnel RAT")},
+    {.label = "Games",
+     .icon = &I_Cat_Games_14x14,
+     .icon_big = &I_CatBig_Games_32x32,
+     TRAT_DIRS("Games")},
+    {.label = "Media",
+     .icon = &I_Cat_Media_14x14,
+     .icon_big = &I_CatBig_Media_32x32,
+     TRAT_DIRS("Media")},
     {.label = "Tools",
      .icon = &I_Cat_Tools_14x14,
+     .icon_big = &I_CatBig_Tools_32x32,
      TRAT_BUILTINS({"Archive", "Archive"}),
      TRAT_DIRS("Tools", "Scripts")},
-    {.label = "More", .icon = &I_Cat_More_14x14, .kind = TratCatMore},
-    {.label = "Settings", .icon = &A_Settings_14, .kind = TratCatSettings},
+    {.label = "More",
+     .icon = &I_Cat_More_14x14,
+     .icon_big = &I_CatBig_More_32x32,
+     .kind = TratCatMore},
+    {.label = "Settings",
+     .icon = &A_Settings_14,
+     .icon_big = &I_CatBig_Settings_32x32,
+     .kind = TratCatSettings},
 };
 #define TRAT_CATEGORIES_COUNT COUNT_OF(trat_categories)
 
@@ -554,11 +589,12 @@ bool loader_menu_load_fap_meta(
 }
 
 static void loader_menu_build_menu(LoaderMenuApp* app, LoaderMenu* menu) {
+    const bool big = momentum_settings.menu_style == MenuStyleRat;
     for(size_t i = 0; i < TRAT_CATEGORIES_COUNT; i++) {
         menu_add_item(
             app->primary_menu,
             trat_categories[i].label,
-            trat_categories[i].icon,
+            big ? trat_categories[i].icon_big : trat_categories[i].icon,
             i,
             loader_menu_open_category,
             app);

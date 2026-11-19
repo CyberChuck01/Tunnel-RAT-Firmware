@@ -22,7 +22,7 @@ const char* const menu_style_names[MenuStyleCount] = {
     "Vertical",
     "C64",
     "Compact",
-    "MNTM",
+    "Classic",
     "CoverFlow",
     "Tunnel R.A.T.",
 };
@@ -81,33 +81,7 @@ void momentum_app_scene_interface_mainmenu_on_enter(void* context) {
     variable_item_set_current_value_text(item, menu_style_names[momentum_settings.menu_style]);
     variable_item_set_current_value_index(item, momentum_settings.menu_style);
 
-    variable_item_list_add(var_item_list, "Reset Menu", 0, NULL, app);
-
-    size_t count = CharList_size(app->mainmenu_app_labels);
-    item = variable_item_list_add(
-        var_item_list, "Item", count, momentum_app_scene_interface_mainmenu_app_changed, app);
-    if(count) {
-        app->mainmenu_app_index = CLAMP(app->mainmenu_app_index, count - 1, 0U);
-        char label[21];
-        snprintf(label, sizeof(label), "Item  %u/%u", 1 + app->mainmenu_app_index, count);
-        variable_item_set_item_label(item, label);
-        variable_item_set_current_value_text(
-            item, *CharList_get(app->mainmenu_app_labels, app->mainmenu_app_index));
-    } else {
-        app->mainmenu_app_index = 0;
-        variable_item_set_current_value_text(item, "None");
-    }
-    variable_item_set_current_value_index(item, app->mainmenu_app_index);
-
-    variable_item_list_add(var_item_list, "Add Item", 0, NULL, app);
-
-    item = variable_item_list_add(
-        var_item_list, "Move Item", 3, momentum_app_scene_interface_mainmenu_move_app_changed, app);
-    variable_item_set_current_value_text(item, "");
-    variable_item_set_current_value_index(item, 1);
-    variable_item_set_locked(item, count < 2, "Can't move\nwith less\nthan 2 apps!");
-
-    variable_item_list_add(var_item_list, "Remove Item", 0, NULL, app);
+    // Tunnel R.A.T.: the category menu is fixed, so the old main-menu editor is gone
 
     variable_item_list_set_enter_callback(
         var_item_list, momentum_app_scene_interface_mainmenu_var_item_list_callback, app);
