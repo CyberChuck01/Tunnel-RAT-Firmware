@@ -408,7 +408,11 @@ void subghz_free(SubGhz* subghz, bool alloc_for_tx_only) {
 }
 
 #ifndef SUBGHZ_ADD_MANUALLY
+void subghz_scene_start_tr_request(const char* arg);
+
 int32_t subghz_app(char* p) {
+    subghz_scene_start_tr_request((const char*)p);
+    if(p && strncmp((const char*)p, "TR:", 3) == 0) p = NULL;
     enum SubmenuIndex start_scene_state = 0;
     if(p) {
         if(!strcmp(p, "AddManually")) {

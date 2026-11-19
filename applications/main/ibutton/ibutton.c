@@ -267,7 +267,11 @@ void ibutton_widget_callback(GuiButtonType result, InputType type, void* context
     }
 }
 
+void ibutton_scene_start_tr_request(const char* arg);
+
 int32_t ibutton_app(char* arg) {
+    ibutton_scene_start_tr_request((const char*)arg);
+    if(arg && strncmp((const char*)arg, "TR:", 3) == 0) arg = NULL;
     iButton* ibutton = ibutton_alloc();
 
     ibutton_make_app_folder(ibutton);

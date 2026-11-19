@@ -1,3 +1,4 @@
+#include <string.h>
 #include "../subghz_i.h"
 #include "subghz_scene_start.h"
 #include <dolphin/dolphin.h>
@@ -8,6 +9,47 @@
 void subghz_scene_start_submenu_callback(void* context, uint32_t index) {
     SubGhz* subghz = context;
     view_dispatcher_send_custom_event(subghz->view_dispatcher, index);
+}
+
+// Tunnel R.A.T.: the category menu launches straight into one action with "TR:<Action>".
+// The action is "pressed" for the user; backing out of it closes the app again.
+static int32_t tr_pending = -1;
+static bool tr_return_exits = false;
+
+void subghz_scene_start_tr_request(const char* arg) {
+    tr_pending = -1;
+    tr_return_exits = false;
+    if(!arg || strncmp(arg, "TR:", 3) != 0) return;
+    const char* a = arg + 3;
+    if(!strcmp(a, "Read"))
+        tr_pending = SubmenuIndexRead;
+    else if(!strcmp(a, "ReadRAW"))
+        tr_pending = SubmenuIndexReadRAW;
+    else if(!strcmp(a, "Saved"))
+        tr_pending = SubmenuIndexSaved;
+    else if(!strcmp(a, "AddManually"))
+        tr_pending = SubmenuIndexAddManually;
+    else if(!strcmp(a, "FrequencyAnalyzer"))
+        tr_pending = SubmenuIndexFrequencyAnalyzer;
+    else if(!strcmp(a, "RadioSettings"))
+        tr_pending = SubmenuIndexExtSettings;
+}
+
+static bool
+    subghz_scene_start_tr_handle(SceneManager* scene_manager, ViewDispatcher* view_dispatcher) {
+    if(tr_return_exits) {
+        tr_return_exits = false;
+        scene_manager_stop(scene_manager);
+        view_dispatcher_stop(view_dispatcher);
+        return true;
+    }
+    if(tr_pending >= 0) {
+        uint32_t event = (uint32_t)tr_pending;
+        tr_pending = -1;
+        tr_return_exits = true;
+        view_dispatcher_send_custom_event(view_dispatcher, event);
+    }
+    return false;
 }
 
 void subghz_scene_start_on_enter(void* context) {
@@ -54,6 +96,7 @@ void subghz_scene_start_on_enter(void* context) {
         subghz->submenu, scene_manager_get_scene_state(subghz->scene_manager, SubGhzSceneStart));
 
     view_dispatcher_switch_to_view(subghz->view_dispatcher, SubGhzViewIdMenu);
+    subghz_scene_start_tr_handle(subghz->scene_manager, subghz->view_dispatcher);
 }
 
 bool subghz_scene_start_on_event(void* context, SceneManagerEvent event) {

@@ -194,7 +194,11 @@ static void lfrfid_free(LfRfid* lfrfid) {
     free(lfrfid);
 }
 
+void lfrfid_scene_start_tr_request(const char* arg);
+
 int32_t lfrfid_app(char* args) {
+    lfrfid_scene_start_tr_request((const char*)args);
+    if(args && strncmp((const char*)args, "TR:", 3) == 0) args = NULL;
     LfRfid* app = lfrfid_alloc();
 
     lfrfid_make_app_folder(app);

@@ -1,3 +1,4 @@
+#include <string.h>
 #ifndef __GPIO_SCENE_START_H__
 #define __GPIO_SCENE_START_H__
 
@@ -51,6 +52,43 @@ static void gpio_scene_start_var_list_change_callback(VariableItem* item) {
     }
 }
 
+// Tunnel R.A.T.: the category menu launches straight into one action with "TR:<Action>".
+// The action is "pressed" for the user; backing out of it closes the app again.
+static int32_t tr_pending = -1;
+static bool tr_return_exits = false;
+
+void gpio_scene_start_tr_request(const char* arg) {
+    tr_pending = -1;
+    tr_return_exits = false;
+    if(!arg || strncmp(arg, "TR:", 3) != 0) return;
+    const char* a = arg + 3;
+    if(!strcmp(a, "UsbUart"))
+        tr_pending = GpioStartEventUsbUart;
+    else if(!strcmp(a, "ManualControl"))
+        tr_pending = GpioStartEventManualControl;
+    else if(!strcmp(a, "I2CScanner"))
+        tr_pending = GpioStartEventI2CScanner;
+    else if(!strcmp(a, "I2CSfp"))
+        tr_pending = GpioStartEventI2CSfp;
+}
+
+static bool
+    gpio_scene_start_tr_handle(SceneManager* scene_manager, ViewDispatcher* view_dispatcher) {
+    if(tr_return_exits) {
+        tr_return_exits = false;
+        scene_manager_stop(scene_manager);
+        view_dispatcher_stop(view_dispatcher);
+        return true;
+    }
+    if(tr_pending >= 0) {
+        uint32_t event = (uint32_t)tr_pending;
+        tr_pending = -1;
+        tr_return_exits = true;
+        view_dispatcher_send_custom_event(view_dispatcher, event);
+    }
+    return false;
+}
+
 void gpio_scene_start_on_enter(void* context) {
     GpioApp* app = context;
     VariableItemList* var_item_list = app->var_item_list;
@@ -84,6 +122,7 @@ void gpio_scene_start_on_enter(void* context) {
         var_item_list, scene_manager_get_scene_state(app->scene_manager, GpioSceneStart));
 
     view_dispatcher_switch_to_view(app->view_dispatcher, GpioAppViewVarItemList);
+    gpio_scene_start_tr_handle(app->scene_manager, app->view_dispatcher);
 }
 
 bool gpio_scene_start_on_event(void* context, SceneManagerEvent event) {

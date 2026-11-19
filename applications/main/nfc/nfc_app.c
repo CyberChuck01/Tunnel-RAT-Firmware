@@ -511,7 +511,11 @@ void nfc_app_run_external(NfcApp* nfc, const char* app_path) {
     view_dispatcher_stop(nfc->view_dispatcher);
 }
 
+void nfc_scene_start_tr_request(const char* arg);
+
 int32_t nfc_app(void* p) {
+    nfc_scene_start_tr_request((const char*)p);
+    if(p && strncmp((const char*)p, "TR:", 3) == 0) p = NULL;
     if(!nfc_is_hal_ready()) return 0;
 
     NfcApp* nfc = nfc_app_alloc();

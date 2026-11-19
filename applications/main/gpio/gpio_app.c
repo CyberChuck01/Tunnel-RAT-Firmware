@@ -125,7 +125,11 @@ void gpio_app_free(GpioApp* app) {
     free(app);
 }
 
+void gpio_scene_start_tr_request(const char* arg);
+
 int32_t gpio_app(void* p) {
+    gpio_scene_start_tr_request((const char*)p);
+    if(p && strncmp((const char*)p, "TR:", 3) == 0) p = NULL;
     UNUSED(p);
     GpioApp* gpio_app = gpio_app_alloc();
 

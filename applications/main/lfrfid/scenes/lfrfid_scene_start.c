@@ -1,3 +1,4 @@
+#include <string.h>
 #include "../lfrfid_i.h"
 #include <dolphin/dolphin.h>
 
@@ -5,6 +6,43 @@ static void lfrfid_scene_start_submenu_callback(void* context, uint32_t index) {
     LfRfid* app = context;
 
     view_dispatcher_send_custom_event(app->view_dispatcher, index);
+}
+
+// Tunnel R.A.T.: the category menu launches straight into one action with "TR:<Action>".
+// The action is "pressed" for the user; backing out of it closes the app again.
+static int32_t tr_pending = -1;
+static bool tr_return_exits = false;
+
+void lfrfid_scene_start_tr_request(const char* arg) {
+    tr_pending = -1;
+    tr_return_exits = false;
+    if(!arg || strncmp(arg, "TR:", 3) != 0) return;
+    const char* a = arg + 3;
+    if(!strcmp(a, "Read"))
+        tr_pending = LfRfidMenuIndexRead;
+    else if(!strcmp(a, "Saved"))
+        tr_pending = LfRfidMenuIndexSaved;
+    else if(!strcmp(a, "AddManually"))
+        tr_pending = LfRfidMenuIndexAddManually;
+    else if(!strcmp(a, "ExtraActions"))
+        tr_pending = LfRfidMenuIndexExtraActions;
+}
+
+static bool
+    lfrfid_scene_start_tr_handle(SceneManager* scene_manager, ViewDispatcher* view_dispatcher) {
+    if(tr_return_exits) {
+        tr_return_exits = false;
+        scene_manager_stop(scene_manager);
+        view_dispatcher_stop(view_dispatcher);
+        return true;
+    }
+    if(tr_pending >= 0) {
+        uint32_t event = (uint32_t)tr_pending;
+        tr_pending = -1;
+        tr_return_exits = true;
+        view_dispatcher_send_custom_event(view_dispatcher, event);
+    }
+    return false;
 }
 
 void lfrfid_scene_start_on_enter(void* context) {
@@ -37,6 +75,7 @@ void lfrfid_scene_start_on_enter(void* context) {
     app->read_type = LFRFIDWorkerReadTypeAuto;
 
     view_dispatcher_switch_to_view(app->view_dispatcher, LfRfidViewSubmenu);
+    lfrfid_scene_start_tr_handle(app->scene_manager, app->view_dispatcher);
 }
 
 bool lfrfid_scene_start_on_event(void* context, SceneManagerEvent event) {

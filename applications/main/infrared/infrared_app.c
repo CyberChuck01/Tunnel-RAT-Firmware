@@ -571,7 +571,11 @@ void infrared_popup_closed_callback(void* context) {
         infrared->view_dispatcher, InfraredCustomEventTypePopupClosed);
 }
 
+void infrared_scene_start_tr_request(const char* arg);
+
 int32_t infrared_app(void* p) {
+    infrared_scene_start_tr_request((const char*)p);
+    if(p && strncmp((const char*)p, "TR:", 3) == 0) p = NULL;
     InfraredApp* infrared = infrared_alloc();
 
     infrared_load_settings(infrared);

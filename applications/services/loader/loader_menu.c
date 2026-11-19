@@ -123,7 +123,8 @@ void loader_menu_free(LoaderMenu* loader_menu) {
 
 typedef struct {
     const char* label; // shown in the list
-    const char* app; // internal app name to launch
+    const char* app; // app name to launch (internal or menu-external)
+    const char* args; // launch args, e.g. "TR:Read" jumps straight into that action
 } TratBuiltin;
 
 typedef enum {
@@ -153,35 +154,68 @@ typedef struct {
 static const TratCategory trat_categories[] = {
     {.label = "Sub-GHz",
      .icon = &A_Sub1ghz_14,
+     TRAT_BUILTINS(
+         {"Read", "Sub-GHz", "TR:Read"},
+         {"Read RAW", "Sub-GHz", "TR:ReadRAW"},
+         {"Frequency Analyzer", "Sub-GHz", "TR:FrequencyAnalyzer"},
+         {"Saved", "Sub-GHz", "TR:Saved"},
+         {"Add Manually", "Sub-GHz", "TR:AddManually"},
+         {"Radio Settings", "Sub-GHz", "TR:RadioSettings"}),
      .icon_big = &I_CatBig_SubGhz_32x32,
      TRAT_DIRS("Sub-GHz")},
     {.label = "NFC",
      .icon = &A_NFC_14,
+     TRAT_BUILTINS(
+         {"Read", "NFC", "TR:Read"},
+         {"Extract MFC Keys", "NFC", "TR:ExtractMfcKeys"},
+         {"Saved", "NFC", "TR:Saved"},
+         {"Extra Actions", "NFC", "TR:ExtraActions"},
+         {"Add Manually", "NFC", "TR:AddManually"}),
      .icon_big = &I_CatBig_Nfc_32x32,
-     TRAT_BUILTINS({"NFC", "NFC"}),
      TRAT_DIRS("NFC")},
     {.label = "RFID",
      .icon = &A_125khz_14,
+     TRAT_BUILTINS(
+         {"Read", "125 kHz RFID", "TR:Read"},
+         {"Saved", "125 kHz RFID", "TR:Saved"},
+         {"Add Manually", "125 kHz RFID", "TR:AddManually"},
+         {"Extra Actions", "125 kHz RFID", "TR:ExtraActions"}),
      .icon_big = &I_CatBig_Rfid_32x32,
-     TRAT_BUILTINS({"125 kHz RFID", "125 kHz RFID"}),
      TRAT_DIRS("RFID")},
     {.label = "Infrared",
      .icon = &A_Infrared_14,
+     TRAT_BUILTINS(
+         {"Universal Remotes", "Infrared", "TR:Universal"},
+         {"Learn New Remote", "Infrared", "TR:Learn"},
+         {"Saved Remotes", "Infrared", "TR:Saved"},
+         {"IR GPIO Settings", "Infrared", "TR:GpioSettings"}),
      .icon_big = &I_CatBig_Infrared_32x32,
      TRAT_DIRS("Infrared")},
     {.label = "iButton",
      .icon = &A_iButton_14,
+     TRAT_BUILTINS(
+         {"Read", "iButton", "TR:Read"},
+         {"Saved", "iButton", "TR:Saved"},
+         {"Add Manually", "iButton", "TR:AddManually"}),
      .icon_big = &I_CatBig_IButton_32x32,
      TRAT_DIRS("iButton")},
-    {.label = "BadUSB", .icon = &A_BadUsb_14, .icon_big = &I_CatBig_BadUsb_32x32, TRAT_DIRS("USB")},
+    {.label = "BadUSB",
+     .icon = &A_BadUsb_14,
+     TRAT_BUILTINS({"Run Script", "Bad KB", NULL}, {"U2F Security Key", "U2F", NULL}),
+     .icon_big = &I_CatBig_BadUsb_32x32,
+     TRAT_DIRS("USB")},
     {.label = "Bluetooth",
      .icon = &I_Cat_Bluetooth_14x14,
      .icon_big = &I_CatBig_Bluetooth_32x32,
      TRAT_DIRS("Bluetooth")},
     {.label = "GPIO / WiFi",
      .icon = &A_GPIO_14,
+     TRAT_BUILTINS(
+         {"USB-UART Bridge", "GPIO", "TR:UsbUart"},
+         {"Manual Control", "GPIO", "TR:ManualControl"},
+         {"I2C Scanner", "GPIO", "TR:I2CScanner"},
+         {"I2C SFP", "GPIO", "TR:I2CSfp"}),
      .icon_big = &I_CatBig_Gpio_32x32,
-     TRAT_BUILTINS({"GPIO", "GPIO"}),
      TRAT_DIRS("GPIO")},
     {.label = "Tunnel R.A.T.",
      .icon = &I_Cat_TunnelRat_14x14,
@@ -197,8 +231,8 @@ static const TratCategory trat_categories[] = {
      TRAT_DIRS("Media")},
     {.label = "Tools",
      .icon = &I_Cat_Tools_14x14,
+     TRAT_BUILTINS({"Archive", "Archive", NULL}),
      .icon_big = &I_CatBig_Tools_32x32,
-     TRAT_BUILTINS({"Archive", "Archive"}),
      TRAT_DIRS("Tools", "Scripts")},
     {.label = "More",
      .icon = &I_Cat_More_14x14,
@@ -222,6 +256,8 @@ typedef struct {
     TratEntryKind kind;
     FuriString* label;
     FuriString* target; // app name or absolute path
+    FuriString* args; // launch args (empty = none)
+    uint32_t order; // actions keep their defined order
 } TratEntry;
 
 typedef struct {
@@ -233,6 +269,12 @@ typedef struct {
     size_t entries_count;
     size_t entries_cap;
 } LoaderMenuApp;
+
+static void loader_menu_start_args(const char* name, const char* args) {
+    Loader* loader = furi_record_open(RECORD_LOADER);
+    loader_start_detached_with_gui_error(loader, name, (args && args[0]) ? args : NULL);
+    furi_record_close(RECORD_LOADER);
+}
 
 static void loader_menu_start(const char* name) {
     Loader* loader = furi_record_open(RECORD_LOADER);
@@ -246,6 +288,7 @@ static void trat_entries_clear(LoaderMenuApp* app) {
     for(size_t i = 0; i < app->entries_count; i++) {
         furi_string_free(app->entries[i].label);
         furi_string_free(app->entries[i].target);
+        furi_string_free(app->entries[i].args);
     }
     app->entries_count = 0;
 }
@@ -257,14 +300,17 @@ static void trat_entries_free(LoaderMenuApp* app) {
     app->entries_cap = 0;
 }
 
-static void trat_entries_add(
+static void trat_entries_add_ex(
     LoaderMenuApp* app,
     TratEntryKind kind,
     const char* label,
-    const char* target) {
-    // Skip duplicates (same target)
+    const char* target,
+    const char* args) {
+    // Skip duplicates (same target + args)
     for(size_t i = 0; i < app->entries_count; i++) {
-        if(furi_string_equal_str(app->entries[i].target, target)) return;
+        if(furi_string_equal_str(app->entries[i].target, target) &&
+           furi_string_equal_str(app->entries[i].args, args ? args : ""))
+            return;
     }
     if(app->entries_count == app->entries_cap) {
         app->entries_cap = app->entries_cap ? app->entries_cap * 2 : 16;
@@ -274,6 +320,16 @@ static void trat_entries_add(
     e->kind = kind;
     e->label = furi_string_alloc_set_str(label);
     e->target = furi_string_alloc_set_str(target);
+    e->args = furi_string_alloc_set_str(args ? args : "");
+    e->order = app->entries_count;
+}
+
+static void trat_entries_add(
+    LoaderMenuApp* app,
+    TratEntryKind kind,
+    const char* label,
+    const char* target) {
+    trat_entries_add_ex(app, kind, label, target, NULL);
 }
 
 static int trat_entry_cmp(const void* a, const void* b) {
@@ -283,6 +339,7 @@ static int trat_entry_cmp(const void* a, const void* b) {
     int ra = ea->kind == TratEntryBuiltin ? 0 : (ea->kind == TratEntryDir ? 1 : 2);
     int rb = eb->kind == TratEntryBuiltin ? 0 : (eb->kind == TratEntryDir ? 1 : 2);
     if(ra != rb) return ra - rb;
+    if(ra == 0) return (int)ea->order - (int)eb->order; // actions: defined order
     return strcasecmp(furi_string_get_cstr(ea->label), furi_string_get_cstr(eb->label));
 }
 
@@ -302,6 +359,13 @@ static void trat_pretty_name(FuriString* out, const char* filename) {
             word_start = (c == ' ');
         }
     }
+}
+
+static bool trat_is_external_app(const char* name) {
+    for(size_t i = 0; i < FLIPPER_EXTERNAL_APPS_COUNT; i++) {
+        if(!strcmp(FLIPPER_EXTERNAL_APPS[i].name, name)) return true;
+    }
+    return false;
 }
 
 static bool trat_is_internal_app(const char* name) {
@@ -355,9 +419,19 @@ static void
                 bool official = false;
                 for(size_t i = 0; i < FLIPPER_EXTERNAL_APPS_COUNT; i++) {
                     if(!strcmp(FLIPPER_EXTERNAL_APPS[i].path, full_c)) {
-                        trat_entries_add(
-                            app, TratEntryBuiltin, FLIPPER_EXTERNAL_APPS[i].name, full_c);
                         official = true;
+                        // Section already lists this app's actions (Bruce-style): don't add
+                        // the whole app again
+                        bool has_actions = false;
+                        for(size_t e = 0; e < app->entries_count; e++) {
+                            if(furi_string_equal_str(
+                                   app->entries[e].target, FLIPPER_EXTERNAL_APPS[i].name))
+                                has_actions = true;
+                        }
+                        if(!has_actions) {
+                            trat_entries_add(
+                                app, TratEntryBuiltin, FLIPPER_EXTERNAL_APPS[i].name, full_c);
+                        }
                         break;
                     }
                 }
@@ -398,9 +472,14 @@ static void trat_build_category_list(LoaderMenuApp* app) {
     } else {
         submenu_set_header(app->category_menu, cat->label);
         for(size_t i = 0; i < cat->builtins_count; i++) {
-            if(trat_is_internal_app(cat->builtins[i].app)) {
-                trat_entries_add(
-                    app, TratEntryBuiltin, cat->builtins[i].label, cat->builtins[i].app);
+            if(trat_is_internal_app(cat->builtins[i].app) ||
+               trat_is_external_app(cat->builtins[i].app)) {
+                trat_entries_add_ex(
+                    app,
+                    TratEntryBuiltin,
+                    cat->builtins[i].label,
+                    cat->builtins[i].app,
+                    cat->builtins[i].args);
             }
         }
         for(size_t d = 0; d < cat->dirs_count; d++) {
@@ -468,6 +547,8 @@ static void trat_category_menu_callback(void* context, uint32_t index) {
         run_with_default_app(target);
         break;
     case TratEntryBuiltin:
+        loader_menu_start_args(target, furi_string_get_cstr(e->args));
+        break;
     case TratEntryFap:
     default:
         loader_menu_start(target);
