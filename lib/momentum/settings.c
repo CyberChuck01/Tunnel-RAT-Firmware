@@ -123,10 +123,18 @@ static const struct {
     {setting_uint(rpc_color_bg, 0x000000, 0xFFFFFF)},
 };
 
+// Tunnel R.A.T.: settings moved to their own file. On first boot after coming from
+// Momentum, carry the old settings over (RGB backlight on/off, colours, etc.) and only
+// switch the menu to the Tunnel R.A.T. carousel.
+#define MOMENTUM_SETTINGS_OLD_PATH INT_PATH(".momentum_settings.txt")
+
 void momentum_settings_load(void) {
     Storage* storage = furi_record_open(RECORD_STORAGE);
+    const bool migrate = !storage_file_exists(storage, MOMENTUM_SETTINGS_PATH) &&
+                         storage_file_exists(storage, MOMENTUM_SETTINGS_OLD_PATH);
     FlipperFormat* file = flipper_format_file_alloc(storage);
-    if(flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH)) {
+    if(flipper_format_file_open_existing(
+           file, migrate ? MOMENTUM_SETTINGS_OLD_PATH : MOMENTUM_SETTINGS_PATH)) {
         FuriString* val_str = furi_string_alloc();
         int32_t val_int;
         uint32_t val_uint;
@@ -164,6 +172,11 @@ void momentum_settings_load(void) {
     }
     flipper_format_free(file);
     furi_record_close(RECORD_STORAGE);
+
+    if(migrate) {
+        momentum_settings.menu_style = MenuStyleRat;
+        momentum_settings_save();
+    }
 
     rgb_backlight_load_settings(momentum_settings.rgb_backlight);
 }
