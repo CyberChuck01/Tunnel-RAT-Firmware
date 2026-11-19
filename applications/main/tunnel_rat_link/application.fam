@@ -1,0 +1,13 @@
+# Device: Flipper Zero (Tunnel R.A.T. firmware) - Tunnel R.A.T. Link app
+App(
+    appid="tunnel_rat_link",
+    name="Tunnel R.A.T. Link",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="tunnel_rat_link_app",
+    stack_size=2 * 1024,
+    fap_category="Tunnel RAT",
+    fap_icon="icon.png",
+    fap_author="cyberchuck01",
+    fap_version="1.0",
+    fap_description="Run the Flipper CLI over the GPIO UART so a Tunnel R.A.T. ESP32 WiFi bridge can drive it from the dashboard",
+)
