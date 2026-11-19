@@ -582,9 +582,21 @@ static int32_t loader_menu_setting_pin_unpin_parallel(void* context) {
     return 0;
 }
 
+#define TRAT_SETTINGS_APP        "R.A.T. Settings"
+#define TRAT_SETTINGS_IDX_SCREEN ((uint32_t) - 10)
+#define TRAT_SETTINGS_IDX_APP    ((uint32_t) - 11)
+
 static void
     loader_menu_settings_menu_callback(void* context, InputType input_type, uint32_t index) {
     UNUSED(context);
+    // Tunnel R.A.T. entries at the top of the Settings section
+    if(index == TRAT_SETTINGS_IDX_SCREEN || index == TRAT_SETTINGS_IDX_APP) {
+        if(input_type == InputTypeShort) {
+            loader_menu_start_args(
+                TRAT_SETTINGS_APP, index == TRAT_SETTINGS_IDX_SCREEN ? "MiscScreen" : NULL);
+        }
+        return;
+    }
     const char* name = FLIPPER_SETTINGS_APPS[index].name;
 
     if(input_type == InputTypeShort) {
@@ -684,6 +696,18 @@ static void loader_menu_build_menu(LoaderMenuApp* app, LoaderMenu* menu) {
 }
 
 static void loader_menu_build_submenu(LoaderMenuApp* app, LoaderMenu* loader_menu) {
+    submenu_add_item_ex(
+        app->settings_menu,
+        "Screen & RGB Backlight",
+        TRAT_SETTINGS_IDX_SCREEN,
+        loader_menu_settings_menu_callback,
+        NULL);
+    submenu_add_item_ex(
+        app->settings_menu,
+        TRAT_SETTINGS_APP,
+        TRAT_SETTINGS_IDX_APP,
+        loader_menu_settings_menu_callback,
+        NULL);
     for(size_t i = 0; i < FLIPPER_SETTINGS_APPS_COUNT; i++) {
         submenu_add_item_ex(
             app->settings_menu,
