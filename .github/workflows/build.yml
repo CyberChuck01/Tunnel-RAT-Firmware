@@ -135,6 +135,7 @@ jobs:
             --title "Tunnel R.A.T. firmware - latest build" \
             --notes "Built from ${{ github.sha }}. Install: qFlipper -> Install from file -> pick the .tgz below (or the Flipper mobile app). Use on gear you own or are allowed to test."
 
+      - name: "Copy build output"
         if: ${{ env.SHOULD_UPLOAD == 'true' }}
         run: |
           set -e
