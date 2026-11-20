@@ -4,10 +4,10 @@ App(
     name="Tunnel R.A.T. Link",
     apptype=FlipperAppType.EXTERNAL,
     entry_point="tunnel_rat_link_app",
-    stack_size=2 * 1024,
+    stack_size=4 * 1024,
     fap_category="Tunnel RAT",
     fap_icon="icon.png",
     fap_author="cyberchuck01",
-    fap_version="1.0",
-    fap_description="Run the Flipper CLI over the GPIO UART so a Tunnel R.A.T. ESP32 WiFi bridge can drive it from the dashboard",
+    fap_version="2.0",
+    fap_description="Tunnel R.A.T. companion: NanoPi WiFi/BLE scans, Flock/Axon spotter, wardrive, Sub-GHz field mouse, NFC scanner, Rat Recon, USB tools",
 )
