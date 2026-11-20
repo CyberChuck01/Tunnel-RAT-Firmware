@@ -34,7 +34,7 @@ static void desktop_scene_main_interact_animation_callback(void* context) {
 }
 
 #ifdef APP_ARCHIVE
-static void desktop_switch_to_app(
+__attribute__((unused)) static void desktop_switch_to_app(
     Desktop* desktop,
     const FlipperInternalApplication* flipper_app,
     void* context) {
@@ -115,12 +115,16 @@ bool desktop_scene_main_on_event(void* context, SceneManagerEvent event) {
             consumed = true;
             break;
 
-        case DesktopMainEventOpenArchive:
-#ifdef APP_ARCHIVE
-            desktop_switch_to_app(desktop, &FLIPPER_ARCHIVE, desktop->archive_dir);
-#endif
+        case DesktopMainEventOpenArchive: {
+            // Tunnel R.A.T.: the Down shortcut (and anything else bound to
+            // "Archive") opens the rat icon menu instead of the file browser.
+            // The file browser folder system is gone from the desktop; the
+            // Archive app is still there for file pickers inside tools.
+            Loader* loader = furi_record_open(RECORD_LOADER);
+            loader_show_menu(loader);
+            furi_record_close(RECORD_LOADER);
             consumed = true;
-            break;
+        } break;
 
         case DesktopMainEventOpenPowerOff: {
             // Workaround for shutdown when app can't be opened

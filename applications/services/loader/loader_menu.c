@@ -63,7 +63,7 @@ static void loader_pubsub_callback(const void* message, void* context) {
         }
     } else if(event->type == LoaderEventTypeNoMoreAppsInQueue) {
         if(!loader_menu->thread) {
-            loader_menu->thread = furi_thread_alloc_ex(TAG, 2048, loader_menu_thread, loader_menu);
+            loader_menu->thread = furi_thread_alloc_ex(TAG, 4096, loader_menu_thread, loader_menu);
             furi_thread_start(loader_menu->thread);
         }
     }
@@ -89,7 +89,7 @@ LoaderMenu* loader_menu_alloc(void (*closed_cb)(void*), void* context, bool sett
     loader_menu->subscription = furi_pubsub_subscribe(
         loader_get_pubsub(loader_menu->loader), loader_pubsub_callback, loader_menu);
 
-    loader_menu->thread = furi_thread_alloc_ex(TAG, 2048, loader_menu_thread, loader_menu);
+    loader_menu->thread = furi_thread_alloc_ex(TAG, 4096, loader_menu_thread, loader_menu);
     furi_thread_start(loader_menu->thread);
     return loader_menu;
 }
@@ -294,7 +294,14 @@ typedef struct {
     TratEntry* entries;
     size_t entries_count;
     size_t entries_cap;
+    FuriThread* build_thread; // worker that scans the SD for a category
+    volatile bool building; // true while build_thread is scanning
 } LoaderMenuApp;
+
+// Hard cap on items in one category list. A 1-bit list of hundreds of apps is
+// unusable anyway, and (more importantly) building an unbounded list exhausts
+// the heap -> malloc fail -> crash. Sub-GHz and Tools are the big offenders.
+#define TRAT_MAX_ENTRIES 300
 
 static void loader_menu_start_args(const char* name, const char* args) {
     Loader* loader = furi_record_open(RECORD_LOADER);
@@ -332,6 +339,8 @@ static void trat_entries_add_ex(
     const char* label,
     const char* target,
     const char* args) {
+    // Bound the list so a huge folder can't exhaust the heap and crash.
+    if(app->entries_count >= TRAT_MAX_ENTRIES) return;
     // Skip duplicates (same target + args)
     for(size_t i = 0; i < app->entries_count; i++) {
         if(furi_string_equal_str(app->entries[i].target, target) &&
@@ -339,8 +348,11 @@ static void trat_entries_add_ex(
             return;
     }
     if(app->entries_count == app->entries_cap) {
-        app->entries_cap = app->entries_cap ? app->entries_cap * 2 : 16;
-        app->entries = realloc(app->entries, app->entries_cap * sizeof(TratEntry)); //-V701
+        size_t new_cap = app->entries_cap ? app->entries_cap * 2 : 16;
+        TratEntry* grown = realloc(app->entries, new_cap * sizeof(TratEntry));
+        if(!grown) return; // out of memory: keep what we have instead of crashing
+        app->entries = grown;
+        app->entries_cap = new_cap;
     }
     TratEntry* e = &app->entries[app->entries_count++];
     e->kind = kind;
@@ -569,12 +581,39 @@ static void loader_menu_set_view_pending(void* context, uint32_t arg) {
     view_holder_set_view(app->loader_menu->loader->view_holder, (View*)arg);
 }
 
-static void trat_rebuild_pending(void* context, uint32_t arg) {
-    UNUSED(arg);
+// The directory scan + qsort is far too heavy for the 1 KB timer-daemon stack
+// that furi_timer_pending_callback() runs on (configTIMER_TASK_STACK_DEPTH=256
+// words). Scanning Sub-GHz / Tools there overflowed the stack and crashed. So
+// the scan runs on our own worker thread with a real stack instead.
+static int32_t trat_build_worker(void* context) {
     LoaderMenuApp* app = context;
     trat_build_category_list(app);
-    view_holder_set_view(
-        app->loader_menu->loader->view_holder, submenu_get_view(app->category_menu));
+    // Only take over the screen if the user is still waiting on this category
+    // (they may have pressed Back while we were scanning).
+    if(app->loader_menu->current_view == LoaderMenuViewCategory) {
+        view_holder_set_view(
+            app->loader_menu->loader->view_holder, submenu_get_view(app->category_menu));
+    }
+    app->building = false;
+    return 0;
+}
+
+static void trat_start_build(LoaderMenuApp* app) {
+    if(app->building) return; // a scan is already in flight; ignore the retrigger
+    // Reap the previous (finished) worker before reusing the handle.
+    if(app->build_thread) {
+        furi_thread_join(app->build_thread);
+        furi_thread_free(app->build_thread);
+        app->build_thread = NULL;
+    }
+    app->building = true;
+    app->build_thread = furi_thread_alloc_ex("TratBuild", 4096, trat_build_worker, app);
+    furi_thread_start(app->build_thread);
+}
+
+static void trat_rebuild_pending(void* context, uint32_t arg) {
+    UNUSED(arg);
+    trat_start_build((LoaderMenuApp*)context);
 }
 
 static void trat_category_menu_callback(void* context, uint32_t index) {
@@ -808,6 +847,12 @@ static LoaderMenuApp* loader_menu_app_alloc(LoaderMenu* loader_menu) {
 }
 
 static void loader_menu_app_free(LoaderMenuApp* app) {
+    // Make sure no background scan is still touching our menus/entries.
+    if(app->build_thread) {
+        furi_thread_join(app->build_thread);
+        furi_thread_free(app->build_thread);
+        app->build_thread = NULL;
+    }
     view_holder_set_back_callback(app->loader_menu->loader->view_holder, NULL, NULL);
     view_holder_set_view(
         app->loader_menu->loader->view_holder,
