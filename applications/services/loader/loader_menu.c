@@ -264,7 +264,7 @@ static const TratCategory trat_categories[] = {
          {"General", "R.A.T. Settings", "General"},
          {"File Browser", "R.A.T. Settings", "FileBrowser"},
          {"Sub-GHz Frequencies", "R.A.T. Settings", "Protocols"},
-         {"Dolphin", "R.A.T. Settings", "Dolphin"},
+         {"Rat Level", "R.A.T. Settings", "Dolphin"},
          {"Spoofing", "R.A.T. Settings", "Spoof"},
          {"Passport", "Passport", NULL},
          {"About", "About", NULL})},

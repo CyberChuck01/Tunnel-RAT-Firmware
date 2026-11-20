@@ -1,5 +1,5 @@
 App(
-    appid="momentum_app",
+    appid="rat_settings",
     name="R.A.T. Settings",
     apptype=FlipperAppType.MENUEXTERNAL,
     entry_point="momentum_app",

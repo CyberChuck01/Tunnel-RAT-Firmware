@@ -122,7 +122,7 @@ void momentum_app_scene_misc_dolphin_on_enter(void* context) {
     snprintf(level_str, sizeof(level_str), "%u", level);
     item = variable_item_list_add(
         var_item_list,
-        "Dolphin Level",
+        "Rat Level",
         DOLPHIN_LEVEL_COUNT + 1,
         momentum_app_scene_misc_dolphin_dolphin_level_changed,
         app);
@@ -146,7 +146,7 @@ void momentum_app_scene_misc_dolphin_on_enter(void* context) {
     snprintf(angry_str, sizeof(angry_str), "%lu", app->dolphin_angry);
     item = variable_item_list_add(
         var_item_list,
-        "Dolphin Angry",
+        "Rat Anger",
         BUTTHURT_MAX + 1,
         momentum_app_scene_misc_dolphin_dolphin_angry_changed,
         app);
