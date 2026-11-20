@@ -1,0 +1,43 @@
+name: "App sweep"
+# Tunnel R.A.T.: try-build every app (keep going) and report what compiles AND resolves API symbols
+
+on:
+  push:
+    branches:
+      - "app-sweep"
+  workflow_dispatch:
+
+env:
+  FBT_GIT_SUBMODULE_SHALLOW: 1
+
+jobs:
+  sweep:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: "Build every app, keep going"
+        run: |
+          set +e
+          ./fbt TARGET_HW=7 -k -j$(nproc) fap_dist > sweep.log 2>&1
+          echo "fbt exit $?"
+          find build -path "*extapps*" -name "*.fap" -printf "%f\n" | sed 's/\.fap$//' | sort -u > built_appids.txt
+          grep -E "error:|\*\*\*" sweep.log | grep -oE "applications/tunnel_rat_apps/[^/: ]+" | sed 's#applications/tunnel_rat_apps/##' | sort -u > compile_error_dirs.txt
+          grep -oE "[A-Za-z0-9_]+\.impsyms" sweep.log | sed 's/\.impsyms//' | sort -u > impsyms_fails.txt
+          grep -B1 "Symbols not resolved" sweep.log | grep -oE "[A-Za-z0-9_]+\.fap" | sed 's/\.fap//' | sort -u >> impsyms_fails.txt
+          sort -u impsyms_fails.txt -o impsyms_fails.txt
+          echo "built: $(wc -l < built_appids.txt)  compile-error dirs: $(wc -l < compile_error_dirs.txt)  impsyms fails: $(wc -l < impsyms_fails.txt)"
+          tail -40 sweep.log
+
+      - name: "Publish results to the sweep-results branch"
+        run: |
+          mkdir -p /tmp/res && cp built_appids.txt compile_error_dirs.txt impsyms_fails.txt /tmp/res/
+          cd /tmp/res
+          git init -q && git checkout -q -b sweep-results
+          git add . && git -c user.name=sweep -c user.email=sweep@users.noreply.github.com commit -qm "sweep ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" sweep-results

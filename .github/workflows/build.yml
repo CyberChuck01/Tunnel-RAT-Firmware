@@ -5,6 +5,7 @@ on:
     branches:
       - "**"
       - "!release"
+      - "!app-sweep"
     tags:
       - "*"
   pull_request:
