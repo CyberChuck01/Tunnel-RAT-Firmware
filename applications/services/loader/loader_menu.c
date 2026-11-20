@@ -283,8 +283,30 @@ typedef struct {
     FuriString* label;
     FuriString* target; // app name or absolute path
     FuriString* args; // launch args (empty = none)
+    const Icon* icon; // left icon in the list (NULL = none)
+    bool icon_owned; // true if loaded from a .fap and must be freed
     uint32_t order; // actions keep their defined order
 } TratEntry;
+
+// Reading every .fap's embedded icon means an ELF parse + malloc per app, so
+// cap how many we load per category to keep both time and heap in check. Apps
+// past the budget still appear in the list, just without their own icon.
+#define TRAT_ICON_BUDGET 150
+
+bool loader_menu_load_fap_meta(
+    Storage* storage,
+    FuriString* path,
+    FuriString* name,
+    const Icon** icon);
+
+static void trat_free_loaded_icon(const Icon* icon) {
+    if(!icon) return;
+    if(icon->frames) {
+        free((void*)icon->frames[0]);
+        free((void*)icon->frames);
+    }
+    free((void*)icon);
+}
 
 typedef struct {
     LoaderMenu* loader_menu;
@@ -294,6 +316,7 @@ typedef struct {
     TratEntry* entries;
     size_t entries_count;
     size_t entries_cap;
+    size_t loaded_icons; // count of .fap icons loaded this build (budget)
     FuriThread* build_thread; // worker that scans the SD for a category
     volatile bool building; // true while build_thread is scanning
 } LoaderMenuApp;
@@ -322,8 +345,10 @@ static void trat_entries_clear(LoaderMenuApp* app) {
         furi_string_free(app->entries[i].label);
         furi_string_free(app->entries[i].target);
         furi_string_free(app->entries[i].args);
+        if(app->entries[i].icon_owned) trat_free_loaded_icon(app->entries[i].icon);
     }
     app->entries_count = 0;
+    app->loaded_icons = 0;
 }
 
 static void trat_entries_free(LoaderMenuApp* app) {
@@ -338,19 +363,29 @@ static void trat_entries_add_ex(
     TratEntryKind kind,
     const char* label,
     const char* target,
-    const char* args) {
+    const char* args,
+    const Icon* icon,
+    bool icon_owned) {
     // Bound the list so a huge folder can't exhaust the heap and crash.
-    if(app->entries_count >= TRAT_MAX_ENTRIES) return;
+    if(app->entries_count >= TRAT_MAX_ENTRIES) {
+        if(icon_owned) trat_free_loaded_icon(icon);
+        return;
+    }
     // Skip duplicates (same target + args)
     for(size_t i = 0; i < app->entries_count; i++) {
         if(furi_string_equal_str(app->entries[i].target, target) &&
-           furi_string_equal_str(app->entries[i].args, args ? args : ""))
+           furi_string_equal_str(app->entries[i].args, args ? args : "")) {
+            if(icon_owned) trat_free_loaded_icon(icon);
             return;
+        }
     }
     if(app->entries_count == app->entries_cap) {
         size_t new_cap = app->entries_cap ? app->entries_cap * 2 : 16;
         TratEntry* grown = realloc(app->entries, new_cap * sizeof(TratEntry));
-        if(!grown) return; // out of memory: keep what we have instead of crashing
+        if(!grown) { // out of memory: keep what we have instead of crashing
+            if(icon_owned) trat_free_loaded_icon(icon);
+            return;
+        }
         app->entries = grown;
         app->entries_cap = new_cap;
     }
@@ -359,6 +394,8 @@ static void trat_entries_add_ex(
     e->label = furi_string_alloc_set_str(label);
     e->target = furi_string_alloc_set_str(target);
     e->args = furi_string_alloc_set_str(args ? args : "");
+    e->icon = icon;
+    e->icon_owned = icon_owned;
     e->order = app->entries_count;
 }
 
@@ -367,7 +404,17 @@ static void trat_entries_add(
     TratEntryKind kind,
     const char* label,
     const char* target) {
-    trat_entries_add_ex(app, kind, label, target, NULL);
+    trat_entries_add_ex(app, kind, label, target, NULL, NULL, false);
+}
+
+static void trat_entries_add_icon(
+    LoaderMenuApp* app,
+    TratEntryKind kind,
+    const char* label,
+    const char* target,
+    const Icon* icon,
+    bool icon_owned) {
+    trat_entries_add_ex(app, kind, label, target, NULL, icon, icon_owned);
 }
 
 static int trat_entry_cmp(const void* a, const void* b) {
@@ -417,6 +464,23 @@ static bool trat_is_internal_app(const char* name) {
         if(!strcmp(FLIPPER_SETTINGS_APPS[i].name, name)) return true;
     }
     return false;
+}
+
+// Icon for a built-in app, looked up by its menu name (NULL if not found).
+static const Icon* trat_app_icon(const char* name) {
+    for(size_t i = 0; i < FLIPPER_EXTERNAL_APPS_COUNT; i++) {
+        if(!strcmp(FLIPPER_EXTERNAL_APPS[i].name, name)) return FLIPPER_EXTERNAL_APPS[i].icon;
+    }
+    for(size_t i = 0; i < FLIPPER_APPS_COUNT; i++) {
+        if(!strcmp(FLIPPER_APPS[i].name, name)) return FLIPPER_APPS[i].icon;
+    }
+    for(size_t i = 0; i < FLIPPER_SYSTEM_APPS_COUNT; i++) {
+        if(!strcmp(FLIPPER_SYSTEM_APPS[i].name, name)) return FLIPPER_SYSTEM_APPS[i].icon;
+    }
+    for(size_t i = 0; i < FLIPPER_SETTINGS_APPS_COUNT; i++) {
+        if(!strcmp(FLIPPER_SETTINGS_APPS[i].name, name)) return FLIPPER_SETTINGS_APPS[i].icon;
+    }
+    return NULL;
 }
 
 // rel = path under /ext/apps, e.g. "GPIO/ESP"
@@ -488,15 +552,32 @@ static void trat_scan_dir(
                                 has_actions = true;
                         }
                         if(!has_actions) {
-                            trat_entries_add(
-                                app, TratEntryBuiltin, FLIPPER_EXTERNAL_APPS[i].name, full_c);
+                            trat_entries_add_icon(
+                                app,
+                                TratEntryBuiltin,
+                                FLIPPER_EXTERNAL_APPS[i].name,
+                                full_c,
+                                FLIPPER_EXTERNAL_APPS[i].icon,
+                                false);
                         }
                         break;
                     }
                 }
                 if(!official) {
                     trat_pretty_name(label, name);
-                    trat_entries_add(app, TratEntryFap, furi_string_get_cstr(label), full_c);
+                    // Load the app's own icon, up to the per-build budget.
+                    const Icon* icon = NULL;
+                    bool owned = false;
+                    if(app->loaded_icons < TRAT_ICON_BUDGET) {
+                        FuriString* tmp = furi_string_alloc();
+                        if(loader_menu_load_fap_meta(storage, full, tmp, &icon)) {
+                            owned = true;
+                            app->loaded_icons++;
+                        }
+                        furi_string_free(tmp);
+                    }
+                    trat_entries_add_icon(
+                        app, TratEntryFap, furi_string_get_cstr(label), full_c, icon, owned);
                 }
             } else if(!strcasecmp(ext, ".js")) {
                 trat_pretty_name(label, name);
@@ -538,7 +619,9 @@ static void trat_build_category_list(LoaderMenuApp* app) {
                     TratEntryBuiltin,
                     cat->builtins[i].label,
                     cat->builtins[i].app,
-                    cat->builtins[i].args);
+                    cat->builtins[i].args,
+                    trat_app_icon(cat->builtins[i].app),
+                    false);
             }
         }
         for(size_t d = 0; d < cat->dirs_count; d++) {
@@ -562,9 +645,10 @@ static void trat_build_category_list(LoaderMenuApp* app) {
         submenu_add_item(app->category_menu, "(no apps - add to SD)", (uint32_t)-1, NULL, NULL);
     }
     for(size_t i = 0; i < app->entries_count; i++) {
-        submenu_add_item(
+        submenu_add_item_icon(
             app->category_menu,
             furi_string_get_cstr(app->entries[i].label),
+            app->entries[i].icon,
             i,
             trat_category_menu_callback,
             app);

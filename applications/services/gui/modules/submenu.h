@@ -6,6 +6,7 @@
 #pragma once
 
 #include <gui/view.h>
+#include <gui/icon.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +51,24 @@ View* submenu_get_view(Submenu* submenu);
 void submenu_add_item(
     Submenu* submenu,
     const char* label,
+    uint32_t index,
+    SubmenuItemCallback callback,
+    void* callback_context);
+
+/** Add item to submenu with an optional left icon
+ *
+ * @param      submenu           Submenu instance
+ * @param      label             menu item label
+ * @param      icon              icon shown at the left of the row (not owned;
+ *                               must outlive the item), or NULL for none
+ * @param      index             menu item index, used for callback
+ * @param      callback          menu item callback
+ * @param      callback_context  menu item callback context
+ */
+void submenu_add_item_icon(
+    Submenu* submenu,
+    const char* label,
+    const Icon* icon,
     uint32_t index,
     SubmenuItemCallback callback,
     void* callback_context);
