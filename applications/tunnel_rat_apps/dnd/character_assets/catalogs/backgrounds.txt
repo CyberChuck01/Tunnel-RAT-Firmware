@@ -1,5 +1,0 @@
-# Dungeons & Dolphins SRD 5.2.1 background names.
-Acolyte
-Criminal
-Sage
-Soldier
