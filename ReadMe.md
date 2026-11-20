@@ -47,10 +47,23 @@ Every push builds on GitHub Actions (`.github/workflows/build.yml`) — download
 
 ## Credits & license
 
-GPL-3.0, same as upstream. All credit for the base goes to the
-[Momentum](https://github.com/Next-Flip/Momentum-Firmware),
-[Unleashed](https://github.com/DarkFlippers/unleashed-firmware) and
-[official Flipper](https://github.com/flipperdevices/flipperzero-firmware) teams and the app
-authors in Momentum-Apps. The original Momentum readme is in `tunnel_rat/Momentum-ReadMe.md`.
+Tunnel R.A.T. is free software under the **GNU General Public License v3.0** (see
+[`LICENSE`](LICENSE)) — the same license as the firmwares it builds on. You're free to
+use, study, modify and redistribute it under the GPL-3.0 terms; the complete source is
+in this repository.
+
+It's a fork and claims no authorship of the base platform. All credit for the
+foundation goes to three upstream projects, all GPL-3.0:
+
+- **Momentum** — Next-Flip — https://github.com/Next-Flip/Momentum-Firmware *(direct base)*
+- **Unleashed** — DarkFlippers — https://github.com/DarkFlippers/unleashed-firmware
+- **Official Flipper Zero firmware** — Flipper Devices — https://github.com/flipperdevices/flipperzero-firmware
+
+The bundled apps under `applications/` are the work of many Flipper community
+developers (Momentum-Apps and others) and **keep their own licenses and authors** — those
+notices are preserved in each app's folder. Full attribution is in [`CREDITS.md`](CREDITS.md).
+
+Not affiliated with or endorsed by Flipper Devices, Next-Flip or DarkFlippers. The
+original Momentum readme is in `tunnel_rat/Momentum-ReadMe.md`.
 
 Use it on gear you own or have permission to test. Sub-GHz transmit rules depend on where you live.
