@@ -154,6 +154,7 @@ typedef struct {
 static const TratCategory trat_categories[] = {
     {.label = "Sub-GHz",
      .icon = &A_Sub1ghz_14,
+     .icon_big = &I_CatBig_SubGhz_32x32,
      TRAT_BUILTINS(
          {"Read", "Sub-GHz", "TR:Read"},
          {"Read RAW", "Sub-GHz", "TR:ReadRAW"},
@@ -161,61 +162,64 @@ static const TratCategory trat_categories[] = {
          {"Saved", "Sub-GHz", "TR:Saved"},
          {"Add Manually", "Sub-GHz", "TR:AddManually"},
          {"Radio Settings", "Sub-GHz", "TR:RadioSettings"}),
-     .icon_big = &I_CatBig_SubGhz_32x32,
      TRAT_DIRS("Sub-GHz")},
     {.label = "NFC",
      .icon = &A_NFC_14,
+     .icon_big = &I_CatBig_Nfc_32x32,
      TRAT_BUILTINS(
          {"Read", "NFC", "TR:Read"},
          {"Extract MFC Keys", "NFC", "TR:ExtractMfcKeys"},
          {"Saved", "NFC", "TR:Saved"},
          {"Extra Actions", "NFC", "TR:ExtraActions"},
          {"Add Manually", "NFC", "TR:AddManually"}),
-     .icon_big = &I_CatBig_Nfc_32x32,
      TRAT_DIRS("NFC")},
     {.label = "RFID",
      .icon = &A_125khz_14,
+     .icon_big = &I_CatBig_Rfid_32x32,
      TRAT_BUILTINS(
          {"Read", "125 kHz RFID", "TR:Read"},
          {"Saved", "125 kHz RFID", "TR:Saved"},
          {"Add Manually", "125 kHz RFID", "TR:AddManually"},
          {"Extra Actions", "125 kHz RFID", "TR:ExtraActions"}),
-     .icon_big = &I_CatBig_Rfid_32x32,
      TRAT_DIRS("RFID")},
     {.label = "Infrared",
      .icon = &A_Infrared_14,
+     .icon_big = &I_CatBig_Infrared_32x32,
      TRAT_BUILTINS(
          {"Universal Remotes", "Infrared", "TR:Universal"},
          {"Learn New Remote", "Infrared", "TR:Learn"},
          {"Saved Remotes", "Infrared", "TR:Saved"},
          {"IR GPIO Settings", "Infrared", "TR:GpioSettings"}),
-     .icon_big = &I_CatBig_Infrared_32x32,
      TRAT_DIRS("Infrared")},
     {.label = "iButton",
      .icon = &A_iButton_14,
+     .icon_big = &I_CatBig_IButton_32x32,
      TRAT_BUILTINS(
          {"Read", "iButton", "TR:Read"},
          {"Saved", "iButton", "TR:Saved"},
          {"Add Manually", "iButton", "TR:AddManually"}),
-     .icon_big = &I_CatBig_IButton_32x32,
      TRAT_DIRS("iButton")},
     {.label = "BadUSB",
      .icon = &A_BadUsb_14,
-     TRAT_BUILTINS({"Run Script", "Bad KB", NULL}, {"U2F Security Key", "U2F", NULL}),
      .icon_big = &I_CatBig_BadUsb_32x32,
+     TRAT_BUILTINS({"Run Script", "Bad KB", NULL}, {"U2F Security Key", "U2F", NULL}),
      TRAT_DIRS("USB")},
+    {.label = "WiFi",
+     .icon = &I_Cat_Wifi_14x14,
+     .icon_big = &I_CatBig_Wifi_32x32,
+     TRAT_DIRS("GPIO/ESP", "GPIO/FlipperHTTP")},
     {.label = "Bluetooth",
      .icon = &I_Cat_Bluetooth_14x14,
      .icon_big = &I_CatBig_Bluetooth_32x32,
      TRAT_DIRS("Bluetooth")},
-    {.label = "GPIO / WiFi",
+    {.label = "GPIO",
      .icon = &A_GPIO_14,
+     .icon_big = &I_CatBig_Gpio_32x32,
      TRAT_BUILTINS(
          {"USB-UART Bridge", "GPIO", "TR:UsbUart"},
          {"Manual Control", "GPIO", "TR:ManualControl"},
          {"I2C Scanner", "GPIO", "TR:I2CScanner"},
          {"I2C SFP", "GPIO", "TR:I2CSfp"}),
-     .icon_big = &I_CatBig_Gpio_32x32,
      TRAT_DIRS("GPIO")},
     {.label = "Tunnel R.A.T.",
      .icon = &I_Cat_TunnelRat_14x14,
@@ -231,17 +235,39 @@ static const TratCategory trat_categories[] = {
      TRAT_DIRS("Media")},
     {.label = "Tools",
      .icon = &I_Cat_Tools_14x14,
-     TRAT_BUILTINS({"Archive", "Archive", NULL}),
      .icon_big = &I_CatBig_Tools_32x32,
+     .kind = TratCatMore, // also picks up any folder you add to /ext/apps yourself
      TRAT_DIRS("Tools", "Scripts")},
-    {.label = "More",
-     .icon = &I_Cat_More_14x14,
-     .icon_big = &I_CatBig_More_32x32,
-     .kind = TratCatMore},
-    {.label = "Settings",
+    {.label = "Themes",
+     .icon = &I_Cat_Themes_14x14,
+     .icon_big = &I_CatBig_Themes_32x32,
+     TRAT_BUILTINS(
+         {"Asset Pack & Anims", "R.A.T. Settings", "Graphics"},
+         {"Screen & RGB Backlight", "R.A.T. Settings", "MiscScreen"},
+         {"Main Menu Style", "R.A.T. Settings", "MenuStyle"},
+         {"Lockscreen", "R.A.T. Settings", "Lockscreen"},
+         {"Statusbar", "R.A.T. Settings", "Statusbar"},
+         {"VGM Colors", "R.A.T. Settings", "Vgm"})},
+    {.label = "Config",
      .icon = &A_Settings_14,
      .icon_big = &I_CatBig_Settings_32x32,
-     .kind = TratCatSettings},
+     TRAT_BUILTINS(
+         {"Bluetooth", "Bluetooth", NULL},
+         {"LCD and Notifications", "LCD and Notifications", NULL},
+         {"Power", "Power", NULL},
+         {"Storage", "Storage", NULL},
+         {"Clock & Alarm", "Clock & Alarm", NULL},
+         {"Desktop", "Desktop", NULL},
+         {"Input", "Input", NULL},
+         {"Expansion Modules", "Expansion Modules", NULL},
+         {"System", "System", NULL},
+         {"General", "R.A.T. Settings", "General"},
+         {"File Browser", "R.A.T. Settings", "FileBrowser"},
+         {"Sub-GHz Frequencies", "R.A.T. Settings", "Protocols"},
+         {"Dolphin", "R.A.T. Settings", "Dolphin"},
+         {"Spoofing", "R.A.T. Settings", "Spoof"},
+         {"Passport", "Passport", NULL},
+         {"About", "About", NULL})},
 };
 #define TRAT_CATEGORIES_COUNT COUNT_OF(trat_categories)
 
@@ -375,24 +401,38 @@ static bool trat_is_internal_app(const char* name) {
     for(size_t i = 0; i < FLIPPER_SYSTEM_APPS_COUNT; i++) {
         if(!strcmp(FLIPPER_SYSTEM_APPS[i].name, name)) return true;
     }
+    for(size_t i = 0; i < FLIPPER_SETTINGS_APPS_COUNT; i++) {
+        if(!strcmp(FLIPPER_SETTINGS_APPS[i].name, name)) return true;
+    }
     return false;
 }
 
-static bool trat_dir_claimed(const char* name) {
+// rel = path under /ext/apps, e.g. "GPIO/ESP"
+static bool trat_dir_claimed(const char* rel) {
     for(size_t c = 0; c < TRAT_CATEGORIES_COUNT; c++) {
         for(size_t d = 0; d < trat_categories[c].dirs_count; d++) {
-            if(!strcasecmp(trat_categories[c].dirs[d], name)) return true;
+            if(!strcasecmp(trat_categories[c].dirs[d], rel)) return true;
         }
     }
-    // Asset/resource folders are not app categories
+    return false;
+}
+
+static bool trat_dir_ignored(const char* name) {
+    // Resource folders are never app sections
     return !strcasecmp(name, "assets") || !strcasecmp(name, "Debug") ||
            !strcasecmp(name, "Examples");
 }
 
-/* Scan one directory. If only_unclaimed, top-level /ext/apps folders that
- * belong to a category are skipped (used by "More"). */
-static void
-    trat_scan_dir(LoaderMenuApp* app, Storage* storage, const char* dir_path, bool only_unclaimed) {
+/* Flat, Bruce-style scan: every app under dir_path (and its subfolders) goes into one
+ * list. Subfolders that are their own section (e.g. GPIO/ESP -> WiFi) are skipped.
+ * rel is dir_path relative to /ext/apps. */
+#define TRAT_SCAN_DEPTH 3
+static void trat_scan_dir(
+    LoaderMenuApp* app,
+    Storage* storage,
+    const char* dir_path,
+    const char* rel,
+    uint8_t depth) {
     File* dir = storage_file_alloc(storage);
     FuriString* full = furi_string_alloc();
     FuriString* label = furi_string_alloc();
@@ -406,9 +446,16 @@ static void
             const char* full_c = furi_string_get_cstr(full);
 
             if(file_info_is_dir(&info)) {
-                if(only_unclaimed && trat_dir_claimed(name)) continue;
-                furi_string_printf(label, "%s >", name);
-                trat_entries_add(app, TratEntryDir, furi_string_get_cstr(label), full_c);
+                if(trat_dir_ignored(name) || depth >= TRAT_SCAN_DEPTH) continue;
+                FuriString* sub_rel = furi_string_alloc();
+                if(rel[0])
+                    furi_string_printf(sub_rel, "%s/%s", rel, name);
+                else
+                    furi_string_set_str(sub_rel, name);
+                if(!trat_dir_claimed(furi_string_get_cstr(sub_rel))) {
+                    trat_scan_dir(app, storage, full_c, furi_string_get_cstr(sub_rel), depth + 1);
+                }
+                furi_string_free(sub_rel);
                 continue;
             }
 
@@ -466,7 +513,7 @@ static void trat_build_category_list(LoaderMenuApp* app) {
 
     if(lm->subdir[0]) {
         // Inside a nested folder
-        trat_scan_dir(app, storage, lm->subdir, false);
+        trat_scan_dir(app, storage, lm->subdir, "", 0);
         const char* leaf = strrchr(lm->subdir, '/');
         submenu_set_header(app->category_menu, leaf ? leaf + 1 : lm->subdir);
     } else {
@@ -484,10 +531,11 @@ static void trat_build_category_list(LoaderMenuApp* app) {
         }
         for(size_t d = 0; d < cat->dirs_count; d++) {
             furi_string_printf(path, EXT_PATH("apps/%s"), cat->dirs[d]);
-            trat_scan_dir(app, storage, furi_string_get_cstr(path), false);
+            trat_scan_dir(app, storage, furi_string_get_cstr(path), cat->dirs[d], 0);
         }
         if(cat->kind == TratCatMore) {
-            trat_scan_dir(app, storage, EXT_PATH("apps"), true);
+            // anything you add to /ext/apps that no section claims
+            trat_scan_dir(app, storage, EXT_PATH("apps"), "", 0);
         }
     }
 

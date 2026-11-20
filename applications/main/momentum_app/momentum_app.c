@@ -489,8 +489,28 @@ extern int32_t momentum_app(void* p) {
     // Check for command line arguments to navigate to specific scenes
     uint32_t first_scene = MomentumAppSceneStart;
     if(p && strlen(p)) {
-        if(!strcmp(p, "MiscScreen")) {
-            first_scene = MomentumAppSceneMiscScreen;
+        // Tunnel R.A.T.: Config / Themes sections open each page directly
+        static const struct {
+            const char* name;
+            uint32_t scene;
+        } pages[] = {
+            {"MiscScreen", MomentumAppSceneMiscScreen},
+            {"Graphics", MomentumAppSceneInterfaceGraphics},
+            {"MenuStyle", MomentumAppSceneInterfaceMainmenu},
+            {"Lockscreen", MomentumAppSceneInterfaceLockscreen},
+            {"Statusbar", MomentumAppSceneInterfaceStatusbar},
+            {"FileBrowser", MomentumAppSceneInterfaceFilebrowser},
+            {"General", MomentumAppSceneInterfaceGeneral},
+            {"Protocols", MomentumAppSceneProtocols},
+            {"Dolphin", MomentumAppSceneMiscDolphin},
+            {"Spoof", MomentumAppSceneMiscSpoof},
+            {"Vgm", MomentumAppSceneMiscVgm},
+        };
+        for(size_t i = 0; i < COUNT_OF(pages); i++) {
+            if(!strcmp(p, pages[i].name)) {
+                first_scene = pages[i].scene;
+                break;
+            }
         }
     }
 
