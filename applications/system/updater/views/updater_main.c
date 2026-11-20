@@ -94,11 +94,11 @@ static void updater_main_draw_callback(Canvas* canvas, void* _model) {
         canvas_draw_icon(canvas, 75, 55, &I_Pin_back_arrow_10x8);
     } else {
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str_aligned(canvas, 82, 5, AlignCenter, AlignTop, "Installing");
+        elements_multiline_text_aligned(
+            canvas, 84, 4, AlignCenter, AlignTop, "The rat is\nburrowing its\ntunnel...");
         canvas_draw_str_aligned(
             canvas, 64, 51, AlignCenter, AlignTop, furi_string_get_cstr(model->status));
         canvas_draw_icon(canvas, 4, 5, &I_Updating_32x40);
-        canvas_draw_icon(canvas, 50, 16, &I_Updating_Logo_62x15);
         elements_progress_bar(canvas, 42, 36, 80, (float)model->progress / 100);
     }
 }
