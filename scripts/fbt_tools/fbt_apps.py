@@ -136,6 +136,12 @@ def LoadAppManifest(env, entry):
 
 
 def PrepareApplicationsBuild(env):
+    unmatched = env["APPMGR"].tr_layout_unmatched()
+    if unmatched:
+        raise StopError(
+            f"tunnel_rat/app_layout.txt lists appids no app declares: {', '.join(unmatched)} "
+            "(typo, or applications/external not checked out?)"
+        )
     try:
         appbuild = env["APPBUILD"] = env["APPMGR"].filter_apps(
             applist=env["APPS"],

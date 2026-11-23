@@ -124,9 +124,39 @@ class FlipperApplication:
                 raise ValueError("Not enough version components")
 
 
+# Tunnel R.A.T.: per-app folder moves and removals, see tunnel_rat/app_layout.txt
+TR_APP_LAYOUT_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "tunnel_rat", "app_layout.txt")
+)
+TR_APP_LAYOUT_REMOVE = "REMOVE"
+
+
+def load_tr_app_layout(path: str = TR_APP_LAYOUT_PATH) -> dict:
+    layout = {}
+    if not os.path.isfile(path):
+        return layout  # e.g. SDK/ufbt copies of these scripts
+    with open(path, "rt") as layout_file:
+        for lineno, line in enumerate(layout_file, 1):
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) != 2:
+                raise FlipperManifestException(
+                    f"{path}:{lineno}: expected '<appid> <folder|{TR_APP_LAYOUT_REMOVE}>'"
+                )
+            layout[parts[0]] = parts[1]
+    return layout
+
+
 class AppManager:
     def __init__(self):
         self.known_apps = {}
+        self.tr_layout = load_tr_app_layout()
+        self.tr_layout_used = set()
+
+    def tr_layout_unmatched(self):
+        return sorted(set(self.tr_layout) - self.tr_layout_used)
 
     def get(self, appname: str):
         try:
@@ -219,6 +249,12 @@ class AppManager:
             self._add_known_app(app)
 
     def _add_known_app(self, app: FlipperApplication):
+        layout = self.tr_layout.get(app.appid)
+        if layout:
+            self.tr_layout_used.add(app.appid)
+            if layout == TR_APP_LAYOUT_REMOVE:
+                return
+            app.fap_category = layout
         if self.known_apps.get(app.appid, None):
             raise FlipperManifestException(f"Duplicate app declaration: {app.appid}")
         self.known_apps[app.appid] = app

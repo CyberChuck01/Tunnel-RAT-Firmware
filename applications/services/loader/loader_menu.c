@@ -46,6 +46,8 @@ struct LoaderMenu {
     int32_t category;
     uint32_t selected_category_item;
     char subdir[TRAT_SUBDIR_MAX];
+    char letter; // A-Z sections: chosen letter ('A'..'Z', '#'), 0 = letter list
+    uint32_t selected_letter_item;
 };
 
 static int32_t loader_menu_thread(void* p);
@@ -79,6 +81,8 @@ LoaderMenu* loader_menu_alloc(void (*closed_cb)(void*), void* context, bool sett
     loader_menu->category = -1;
     loader_menu->selected_category_item = 0;
     loader_menu->subdir[0] = '\0';
+    loader_menu->letter = 0;
+    loader_menu->selected_letter_item = 0;
     loader_menu->current_view = settings_only ? LoaderMenuViewSettings : LoaderMenuViewPrimary;
     loader_menu->loader = furi_record_open(RECORD_LOADER);
 
@@ -119,6 +123,8 @@ void loader_menu_free(LoaderMenu* loader_menu) {
  *   - every .fap / .js found in its /ext/apps/<folder>
  *   - subfolders (e.g. GPIO/ESP), which open as nested lists
  * No more "Apps -> category folder -> app" double layer.
+ * Big sections (Tools) open an A-Z letter list first; OK on a letter shows the
+ * apps starting with it. That also keeps each list under TRAT_MAX_ENTRIES.
  * ==========================================================================*/
 
 typedef struct {
@@ -138,6 +144,7 @@ typedef struct {
     const Icon* icon;
     const Icon* icon_big; // 32x32 rat badge for the Tunnel R.A.T. carousel
     TratCatKind kind;
+    bool alpha; // open as an A-Z letter list first
     const TratBuiltin* builtins;
     size_t builtins_count;
     const char* const* dirs;
@@ -207,7 +214,7 @@ static const TratCategory trat_categories[] = {
     {.label = "WiFi",
      .icon = &I_Cat_Wifi_14x14,
      .icon_big = &I_CatBig_Wifi_32x32,
-     TRAT_DIRS("GPIO/ESP", "GPIO/FlipperHTTP")},
+     TRAT_DIRS("GPIO/ESP", "GPIO/FlipperHTTP", "GPIO/ESP32", "GPIO/ESP8266")},
     {.label = "Bluetooth",
      .icon = &I_Cat_Bluetooth_14x14,
      .icon_big = &I_CatBig_Bluetooth_32x32,
@@ -237,6 +244,7 @@ static const TratCategory trat_categories[] = {
      .icon = &I_Cat_Tools_14x14,
      .icon_big = &I_CatBig_Tools_32x32,
      .kind = TratCatMore, // also picks up any folder you add to /ext/apps yourself
+     .alpha = true,
      TRAT_DIRS("Tools", "Scripts")},
     {.label = "Themes",
      .icon = &I_Cat_Themes_14x14,
@@ -276,6 +284,7 @@ typedef enum {
     TratEntryDir, // open nested list
     TratEntryFap, // launch by path
     TratEntryFile, // .js etc, run_with_default_app
+    TratEntryLetter, // A-Z sections: open that letter
 } TratEntryKind;
 
 typedef struct {
@@ -308,6 +317,8 @@ static void trat_free_loaded_icon(const Icon* icon) {
     free((void*)icon);
 }
 
+#define TRAT_LETTER_BUCKETS 27 // A-Z sections: '#' (digits, symbols) + A-Z
+
 typedef struct {
     LoaderMenu* loader_menu;
     Menu* primary_menu;
@@ -317,6 +328,9 @@ typedef struct {
     size_t entries_count;
     size_t entries_cap;
     size_t loaded_icons; // count of .fap icons loaded this build (budget)
+    bool counting; // A-Z letter list pass: only count apps per letter
+    char letter_filter; // A-Z letter pass: only keep apps starting with this
+    uint16_t letter_counts[TRAT_LETTER_BUCKETS];
     FuriThread* build_thread; // worker that scans the SD for a category
     volatile bool building; // true while build_thread is scanning
 } LoaderMenuApp;
@@ -421,8 +435,12 @@ static int trat_entry_cmp(const void* a, const void* b) {
     const TratEntry* ea = a;
     const TratEntry* eb = b;
     // builtins first, then folders, then apps/files
-    int ra = ea->kind == TratEntryBuiltin ? 0 : (ea->kind == TratEntryDir ? 1 : 2);
-    int rb = eb->kind == TratEntryBuiltin ? 0 : (eb->kind == TratEntryDir ? 1 : 2);
+    int ra = (ea->kind == TratEntryBuiltin || ea->kind == TratEntryLetter) ?
+                 0 :
+                 (ea->kind == TratEntryDir ? 1 : 2);
+    int rb = (eb->kind == TratEntryBuiltin || eb->kind == TratEntryLetter) ?
+                 0 :
+                 (eb->kind == TratEntryDir ? 1 : 2);
     if(ra != rb) return ra - rb;
     if(ra == 0) return (int)ea->order - (int)eb->order; // actions: defined order
     return strcasecmp(furi_string_get_cstr(ea->label), furi_string_get_cstr(eb->label));
@@ -493,10 +511,52 @@ static bool trat_dir_claimed(const char* rel) {
     return false;
 }
 
-static bool trat_dir_ignored(const char* name) {
-    // Resource folders are never app sections
-    return !strcasecmp(name, "assets") || !strcasecmp(name, "Debug") ||
-           !strcasecmp(name, "Examples");
+static bool trat_dir_ignored(const char* name, const char* parent_rel) {
+    // Resource folders are never app sections. Only the top-level Debug/Examples
+    // folders are skipped: GPIO/Debug holds real tools (SPI Mem Manager, SWD
+    // Probe, DAP Link...) that belong in the GPIO list.
+    if(!strcasecmp(name, "assets")) return true;
+    return !parent_rel[0] && (!strcasecmp(name, "Debug") || !strcasecmp(name, "Examples"));
+}
+
+/* ---------- A-Z sections ---------- */
+
+static size_t trat_letter_bucket(const char* label) {
+    char c = label[0];
+    if(c >= 'a' && c <= 'z') c -= 32;
+    return (c >= 'A' && c <= 'Z') ? (size_t)(c - 'A' + 1) : 0;
+}
+
+static char trat_bucket_char(size_t bucket) {
+    return bucket ? (char)('A' + bucket - 1) : '#';
+}
+
+// While counting, tally the label and drop it. While showing one letter, drop
+// labels under other letters. Otherwise keep everything.
+static bool trat_letter_keep(LoaderMenuApp* app, const char* label) {
+    if(app->counting) {
+        app->letter_counts[trat_letter_bucket(label)]++;
+        return false;
+    }
+    return !app->letter_filter ||
+           trat_bucket_char(trat_letter_bucket(label)) == app->letter_filter;
+}
+
+// Does this section already list actions for that app (Bruce-style)? A-Z
+// passes don't hold every entry, so the section's own action list is checked
+// too.
+static bool trat_section_has_actions(LoaderMenuApp* app, const char* name) {
+    for(size_t e = 0; e < app->entries_count; e++) {
+        if(furi_string_equal_str(app->entries[e].target, name)) return true;
+    }
+    LoaderMenu* lm = app->loader_menu;
+    if(!lm->subdir[0] && lm->category >= 0) {
+        const TratCategory* cat = &trat_categories[lm->category];
+        for(size_t i = 0; i < cat->builtins_count; i++) {
+            if(!strcmp(cat->builtins[i].app, name)) return true;
+        }
+    }
+    return false;
 }
 
 /* Flat, Bruce-style scan: every app under dir_path (and its subfolders) goes into one
@@ -522,7 +582,7 @@ static void trat_scan_dir(
             const char* full_c = furi_string_get_cstr(full);
 
             if(file_info_is_dir(&info)) {
-                if(trat_dir_ignored(name) || depth >= TRAT_SCAN_DEPTH) continue;
+                if(trat_dir_ignored(name, rel) || depth >= TRAT_SCAN_DEPTH) continue;
                 FuriString* sub_rel = furi_string_alloc();
                 if(rel[0])
                     furi_string_printf(sub_rel, "%s/%s", rel, name);
@@ -537,51 +597,52 @@ static void trat_scan_dir(
 
             const char* ext = strrchr(name, '.');
             if(!ext) continue;
-            if(!strcasecmp(ext, ".fap")) {
-                // Firmware's own menu apps (Sub-GHz, Infrared, Bad KB...) keep real names
-                bool official = false;
+            const bool is_fap = !strcasecmp(ext, ".fap");
+            const bool is_js = !strcasecmp(ext, ".js");
+            if(!is_fap && !is_js) continue;
+
+            // Firmware's own menu apps (Sub-GHz, Infrared, Bad KB...) keep real names
+            const FlipperExternalApplication* official = NULL;
+            if(is_fap) {
                 for(size_t i = 0; i < FLIPPER_EXTERNAL_APPS_COUNT; i++) {
                     if(!strcmp(FLIPPER_EXTERNAL_APPS[i].path, full_c)) {
-                        official = true;
-                        // Section already lists this app's actions (Bruce-style): don't add
-                        // the whole app again
-                        bool has_actions = false;
-                        for(size_t e = 0; e < app->entries_count; e++) {
-                            if(furi_string_equal_str(
-                                   app->entries[e].target, FLIPPER_EXTERNAL_APPS[i].name))
-                                has_actions = true;
-                        }
-                        if(!has_actions) {
-                            trat_entries_add_icon(
-                                app,
-                                TratEntryBuiltin,
-                                FLIPPER_EXTERNAL_APPS[i].name,
-                                full_c,
-                                FLIPPER_EXTERNAL_APPS[i].icon,
-                                false);
-                        }
+                        official = &FLIPPER_EXTERNAL_APPS[i];
                         break;
                     }
                 }
-                if(!official) {
-                    trat_pretty_name(label, name);
-                    // Load the app's own icon, up to the per-build budget.
-                    const Icon* icon = NULL;
-                    bool owned = false;
-                    if(app->loaded_icons < TRAT_ICON_BUDGET) {
-                        FuriString* tmp = furi_string_alloc();
-                        if(loader_menu_load_fap_meta(storage, full, tmp, &icon)) {
-                            owned = true;
-                            app->loaded_icons++;
-                        }
-                        furi_string_free(tmp);
-                    }
-                    trat_entries_add_icon(
-                        app, TratEntryFap, furi_string_get_cstr(label), full_c, icon, owned);
-                }
-            } else if(!strcasecmp(ext, ".js")) {
+            }
+            if(official) {
+                // Section already lists this app's actions (Bruce-style): don't add
+                // the whole app again
+                if(trat_section_has_actions(app, official->name)) continue;
+                furi_string_set_str(label, official->name);
+            } else {
                 trat_pretty_name(label, name);
-                furi_string_cat_str(label, " (js)");
+                if(is_js) furi_string_cat_str(label, " (js)");
+            }
+
+            // Decide on the label before loading anything, so the A-Z counting
+            // pass stays cheap (no icon loads).
+            if(!trat_letter_keep(app, furi_string_get_cstr(label))) continue;
+
+            if(official) {
+                trat_entries_add_icon(
+                    app, TratEntryBuiltin, official->name, full_c, official->icon, false);
+            } else if(is_fap) {
+                // Load the app's own icon, up to the per-build budget.
+                const Icon* icon = NULL;
+                bool owned = false;
+                if(app->loaded_icons < TRAT_ICON_BUDGET) {
+                    FuriString* tmp = furi_string_alloc();
+                    if(loader_menu_load_fap_meta(storage, full, tmp, &icon)) {
+                        owned = true;
+                        app->loaded_icons++;
+                    }
+                    furi_string_free(tmp);
+                }
+                trat_entries_add_icon(
+                    app, TratEntryFap, furi_string_get_cstr(label), full_c, icon, owned);
+            } else {
                 trat_entries_add(app, TratEntryFile, furi_string_get_cstr(label), full_c);
             }
         }
@@ -594,6 +655,28 @@ static void trat_scan_dir(
 
 static void trat_category_menu_callback(void* context, uint32_t index);
 
+// Builtins + the section's folders (+ unclaimed folders for "More" sections),
+// all passed through the A-Z count/filter.
+static void trat_scan_category(LoaderMenuApp* app, Storage* storage, const TratCategory* cat) {
+    FuriString* path = furi_string_alloc();
+    for(size_t i = 0; i < cat->builtins_count; i++) {
+        const TratBuiltin* b = &cat->builtins[i];
+        if(!trat_is_internal_app(b->app) && !trat_is_external_app(b->app)) continue;
+        if(!trat_letter_keep(app, b->label)) continue;
+        trat_entries_add_ex(
+            app, TratEntryBuiltin, b->label, b->app, b->args, trat_app_icon(b->app), false);
+    }
+    for(size_t d = 0; d < cat->dirs_count; d++) {
+        furi_string_printf(path, EXT_PATH("apps/%s"), cat->dirs[d]);
+        trat_scan_dir(app, storage, furi_string_get_cstr(path), cat->dirs[d], 0);
+    }
+    if(cat->kind == TratCatMore) {
+        // anything you add to /ext/apps that no section claims
+        trat_scan_dir(app, storage, EXT_PATH("apps"), "", 0);
+    }
+    furi_string_free(path);
+}
+
 static void trat_build_category_list(LoaderMenuApp* app) {
     LoaderMenu* lm = app->loader_menu;
     const TratCategory* cat = &trat_categories[lm->category];
@@ -602,39 +685,40 @@ static void trat_build_category_list(LoaderMenuApp* app) {
     submenu_reset(app->category_menu);
 
     Storage* storage = furi_record_open(RECORD_STORAGE);
-    FuriString* path = furi_string_alloc();
 
     if(lm->subdir[0]) {
         // Inside a nested folder
         trat_scan_dir(app, storage, lm->subdir, "", 0);
         const char* leaf = strrchr(lm->subdir, '/');
         submenu_set_header(app->category_menu, leaf ? leaf + 1 : lm->subdir);
-    } else {
+    } else if(cat->alpha && !lm->letter) {
+        // A-Z letter list: count apps per first letter, show letters that have any
         submenu_set_header(app->category_menu, cat->label);
-        for(size_t i = 0; i < cat->builtins_count; i++) {
-            if(trat_is_internal_app(cat->builtins[i].app) ||
-               trat_is_external_app(cat->builtins[i].app)) {
-                trat_entries_add_ex(
-                    app,
-                    TratEntryBuiltin,
-                    cat->builtins[i].label,
-                    cat->builtins[i].app,
-                    cat->builtins[i].args,
-                    trat_app_icon(cat->builtins[i].app),
-                    false);
-            }
+        memset(app->letter_counts, 0, sizeof(app->letter_counts));
+        app->counting = true;
+        trat_scan_category(app, storage, cat);
+        app->counting = false;
+        for(size_t b = 0; b < TRAT_LETTER_BUCKETS; b++) {
+            if(!app->letter_counts[b]) continue;
+            char key[2] = {trat_bucket_char(b), '\0'};
+            char text[16];
+            snprintf(text, sizeof(text), "%s  (%u)", key, (unsigned)app->letter_counts[b]);
+            trat_entries_add_ex(app, TratEntryLetter, text, key, NULL, NULL, false);
         }
-        for(size_t d = 0; d < cat->dirs_count; d++) {
-            furi_string_printf(path, EXT_PATH("apps/%s"), cat->dirs[d]);
-            trat_scan_dir(app, storage, furi_string_get_cstr(path), cat->dirs[d], 0);
+    } else {
+        if(cat->alpha) {
+            // One letter of an A-Z section
+            char header[32];
+            snprintf(header, sizeof(header), "%s: %c", cat->label, lm->letter);
+            submenu_set_header(app->category_menu, header);
+            app->letter_filter = lm->letter;
+        } else {
+            submenu_set_header(app->category_menu, cat->label);
         }
-        if(cat->kind == TratCatMore) {
-            // anything you add to /ext/apps that no section claims
-            trat_scan_dir(app, storage, EXT_PATH("apps"), "", 0);
-        }
+        trat_scan_category(app, storage, cat);
+        app->letter_filter = 0;
     }
 
-    furi_string_free(path);
     furi_record_close(RECORD_STORAGE);
 
     if(app->entries_count > 1) {
@@ -714,6 +798,12 @@ static void trat_category_menu_callback(void* context, uint32_t index) {
         lm->selected_category_item = 0;
         furi_timer_pending_callback(trat_rebuild_pending, app, 0);
         break;
+    case TratEntryLetter:
+        lm->letter = target[0];
+        lm->selected_letter_item = index;
+        lm->selected_category_item = 0;
+        furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+        break;
     case TratEntryFile:
         run_with_default_app(target);
         break;
@@ -740,6 +830,8 @@ static void loader_menu_open_category(void* context, uint32_t index) {
     }
     lm->category = index;
     lm->subdir[0] = '\0';
+    lm->letter = 0;
+    lm->selected_letter_item = 0;
     lm->selected_category_item = 0;
     lm->current_view = LoaderMenuViewCategory;
     furi_timer_pending_callback(trat_rebuild_pending, app, 0);
@@ -808,6 +900,11 @@ static void loader_menu_back(void* context) {
             }
             if(is_root || !strcmp(lm->subdir, EXT_PATH("apps")) || !slash) lm->subdir[0] = '\0';
             lm->selected_category_item = 0;
+            furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+        } else if(lm->letter) {
+            // A-Z section: from a letter back to the letter list
+            lm->letter = 0;
+            lm->selected_category_item = lm->selected_letter_item;
             furi_timer_pending_callback(trat_rebuild_pending, app, 0);
         } else {
             lm->category = -1;
