@@ -753,16 +753,44 @@ static void loader_menu_set_view_pending(void* context, uint32_t arg) {
 // that furi_timer_pending_callback() runs on (configTIMER_TASK_STACK_DEPTH=256
 // words). Scanning Sub-GHz / Tools there overflowed the stack and crashed. So
 // the scan runs on our own worker thread with a real stack instead.
+static void trat_rebuild_in_place(LoaderMenuApp* app);
+
+static bool trat_state_is(LoaderMenu* lm, int32_t category, char letter, const char* subdir) {
+    return lm->category == category && lm->letter == letter && !strcmp(lm->subdir, subdir);
+}
+
 static int32_t trat_build_worker(void* context) {
     LoaderMenuApp* app = context;
-    trat_build_category_list(app);
-    // Only take over the screen if the user is still waiting on this category
-    // (they may have pressed Back while we were scanning).
-    if(app->loader_menu->current_view == LoaderMenuViewCategory) {
-        view_holder_set_view(
-            app->loader_menu->loader->view_holder, submenu_get_view(app->category_menu));
+    LoaderMenu* lm = app->loader_menu;
+    int32_t category = -1;
+    char letter = 0;
+    char subdir[TRAT_SUBDIR_MAX] = {0};
+    // Retriggers are ignored while we scan, so if the user moved on meanwhile
+    // (Back, another letter or section) scan again for where they are now.
+    for(uint8_t pass = 0; pass < 4; pass++) {
+        // Back can land before a queued rebuild runs: never index with -1
+        if(lm->category < 0 || (size_t)lm->category >= TRAT_CATEGORIES_COUNT) break;
+        category = lm->category;
+        letter = lm->letter;
+        strlcpy(subdir, lm->subdir, sizeof(subdir));
+
+        trat_build_category_list(app);
+
+        if(lm->current_view != LoaderMenuViewCategory) break;
+        if(trat_state_is(lm, category, letter, subdir)) break;
+    }
+    // Only take over the screen if the user is still waiting on this list
+    // (they may have pressed Back or picked something else while we scanned).
+    if(lm->current_view == LoaderMenuViewCategory && trat_state_is(lm, category, letter, subdir)) {
+        view_holder_set_view(lm->loader->view_holder, submenu_get_view(app->category_menu));
     }
     app->building = false;
+    // A change that landed after the last check had its retrigger dropped
+    // while we were still building: go again.
+    if(lm->current_view == LoaderMenuViewCategory &&
+       !trat_state_is(lm, category, letter, subdir)) {
+        trat_rebuild_in_place(app);
+    }
     return 0;
 }
 
@@ -784,6 +812,17 @@ static void trat_rebuild_pending(void* context, uint32_t arg) {
     trat_start_build((LoaderMenuApp*)context);
 }
 
+// Rebuild the list that is on screen (letter, folder, Back). Show the loading
+// view meanwhile, so the old items can't be picked while their entries are
+// being freed and refilled by the worker.
+static void trat_rebuild_in_place(LoaderMenuApp* app) {
+    furi_timer_pending_callback(
+        loader_menu_set_view_pending,
+        app,
+        (uint32_t)loading_get_view(app->loader_menu->loader->loading));
+    furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+}
+
 static void trat_category_menu_callback(void* context, uint32_t index) {
     LoaderMenuApp* app = context;
     LoaderMenu* lm = app->loader_menu;
@@ -796,13 +835,13 @@ static void trat_category_menu_callback(void* context, uint32_t index) {
     case TratEntryDir:
         strlcpy(lm->subdir, target, sizeof(lm->subdir));
         lm->selected_category_item = 0;
-        furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+        trat_rebuild_in_place(app);
         break;
     case TratEntryLetter:
         lm->letter = target[0];
         lm->selected_letter_item = index;
         lm->selected_category_item = 0;
-        furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+        trat_rebuild_in_place(app);
         break;
     case TratEntryFile:
         run_with_default_app(target);
@@ -900,12 +939,12 @@ static void loader_menu_back(void* context) {
             }
             if(is_root || !strcmp(lm->subdir, EXT_PATH("apps")) || !slash) lm->subdir[0] = '\0';
             lm->selected_category_item = 0;
-            furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+            trat_rebuild_in_place(app);
         } else if(lm->letter) {
             // A-Z section: from a letter back to the letter list
             lm->letter = 0;
             lm->selected_category_item = lm->selected_letter_item;
-            furi_timer_pending_callback(trat_rebuild_pending, app, 0);
+            trat_rebuild_in_place(app);
         } else {
             lm->category = -1;
             lm->current_view = LoaderMenuViewPrimary;
