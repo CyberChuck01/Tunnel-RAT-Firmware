@@ -1,0 +1,59 @@
+# Tunnel R.A.T. app layout
+#
+# Applied at build time by scripts/fbt/appmanifest.py, for both the bundled
+# Momentum apps (applications/external) and applications/tunnel_rat_apps.
+# Lets you move or drop an app without editing its application.fam (or the
+# Momentum-Apps submodule).
+#
+#   <appid>   <folder>    install the app to /ext/apps/<folder> instead
+#   <appid>   REMOVE      don't build or ship it
+#
+# A line whose appid matches no app stops the build, so typos can't slip by.
+# Don't move apps the firmware opens by a fixed path: picopass, mfkey,
+# mass_storage, subghz_remote, subghz_playlist, proto_pirate, ir_remote,
+# xremote, wav_player, magspoof, text_viewer, hex_viewer, nightstand, and
+# anything in apps/assets.
+
+# ---- Moves: put apps under the icon they belong to -------------------------
+nfc_rfid_detector           NFC     # was in Tools
+bad_kb                      USB     # was in Tools; now only under the BadUSB icon
+
+# ---- Same app shipped twice: keep one copy ---------------------------------
+# (same repo/author and same or near-identical source; the kept copy is noted)
+vario                           REMOVE  # keep bme280_vario (same app, newer)
+cfs_tag_writer                  REMOVE  # keep cfs_tag_writer_plus (fork, v1.5)
+gpio_explorer                   REMOVE  # keep gpio_explorer_app
+gpio_reader                     REMOVE  # keep gpio_reader_a
+gpio_pins_reader                REMOVE  # keep gpio_reader_a
+nrf24_batch                     REMOVE  # keep nrf24batch
+nrf24_scanner                   REMOVE  # keep nrf24scan
+channel_scan                    REMOVE  # keep nrf24channelscanner
+spi_terminal                    REMOVE  # keep flipper_spi_terminal
+i2ctools                        REMOVE  # keep i2c_tools (v1.2)
+avr_flasher                     REMOVE  # keep avr_isp
+oscilloscope                    REMOVE  # keep flipperscope
+hc_sr04_dist_sensor             REMOVE  # keep hc_sr04
+rcwl_0516_motion_sensor         REMOVE  # keep rcwl_0516
+plantower_pmsx003_sensor_reader REMOVE  # keep airmon
+bmi160_air_mouse                REMOVE  # keep air_mouse
+atomicdiceroller                REMOVE  # keep flipper_atomicdiceroller
+pokemon_trading                 REMOVE  # keep pokemon (continued version)
+ifttt_button                    REMOVE  # keep esp8266_ifttt_virtual_button
+cam_nannycam                    REMOVE  # keep mayhem_nannycam
+cam_motion                      REMOVE  # keep mayhem_motion
+cam_morse_flasher               REMOVE  # keep mayhem_morseflash
+cam_qrcode                      REMOVE  # keep mayhem_qrcode
+cam_camera                      REMOVE  # keep mayhem_camera
+camera                          REMOVE  # keep mayhem_camera
+ulcfkey_next                    REMOVE  # keep ulcfkey
+ulcbrute_opt                    REMOVE  # keep ulc_brute
+mitsubishi_ac_remote_old        REMOVE  # keep mitsubishi_ac_remote
+samsung_ac_remote_old           REMOVE  # keep samsung_ac_remote
+btremote_kodi                   REMOVE  # keep remote_kodi
+trackerflipx                    REMOVE  # keep time_tracker (v1.0.3)
+pomodoro2                       REMOVE  # keep flipp_pomodoro
+game_2048                       REMOVE  # keep 2048_improved (v1.6)
+jetpack                         REMOVE  # keep jetpack_joyride
+arduventure_ex                  REMOVE  # keep arduventure
+dice_app                        REMOVE  # keep dnd_dice_app
+music_tracker                   REMOVE  # keep zero_tracker

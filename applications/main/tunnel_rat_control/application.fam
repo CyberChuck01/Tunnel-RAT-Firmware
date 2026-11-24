@@ -1,0 +1,17 @@
+# Device: Flipper Zero (Tunnel R.A.T. firmware) - Tunnel R.A.T. Control app
+# USB controller for the Tunnel R.A.T. NanoPi. Talks JSON on the 2nd USB serial
+# channel (/dev/flipper-link, interface 02) so it shares the cable with the CLI
+# and the Tunnel R.A.T. Link app without a collision.
+App(
+    appid="tunnel_rat",
+    name="Tunnel R.A.T. Control",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="tunnel_rat_app",
+    stack_size=8 * 1024,
+    fap_category="Tunnel RAT",
+    fap_icon="icon.png",
+    fap_author="cyberchuck01",
+    fap_version="1.0",
+    fap_description="USB controller for the Tunnel R.A.T. NanoPi: renders the dashboard tool tree, keyboard input, confirms, delete gesture.",
+    requires=["gui"],
+)
